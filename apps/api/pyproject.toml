@@ -8,7 +8,6 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "acme-core",
     "fastapi>=0.142.2",
     "uvicorn[standard]>=0.54.0",
 ]
@@ -22,3 +21,8 @@ build-backend = "uv_build"
 
 [tool.uv.sources]
 acme-core = { workspace = true }
+
+# Vercel project root is apps/api. Dots map to a file path:
+# src.acme_api.main:app -> ./src/acme_api/main.py
+[tool.vercel]
+entrypoint = "src.acme_api.main:app"
