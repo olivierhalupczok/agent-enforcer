@@ -1,5 +1,18 @@
 # AGENTS.md
 
+# Problem
+Goldman Sachs asked us to come up with a solution to a problem for a hackathon competition.
+The problem is as follows: Your task is to build a lightweight, flexible AI Control Layer. This layer can be implemented as a
+gateway, proxy, middleware, or SDK wrapper that intercepts and governs interactions with AI
+systems. This control layer must enforce security, privacy, and resource controls defined
+in/provided by a centralized configuration source (e.g. control catalog). The layer should have
+the ability to generate reporting suitable for security teams as well as management (e.g. via UI
+or otherwise).
+
+# Our approach
+Our vision treats the backend as the middleware between the user (Goldman Sachs employee) and agents deployed on cloud on their servers.
+Employees can have different roles and ranks. We store them in a database. When sending the prompt instead of sending it directly to an available agent, the request goes through our backend. Based on the identity of the user we then modify the prompt with checking it against the guardrails, adding more context like tools the agent can call. Then we forward new request to the agent
+
 Instructions for AI coding agents working in this repository.
 ## Project overview
 
@@ -42,7 +55,7 @@ cd apps/web && pnpm build         # type-check + production build
 - API and CLI must not import from each other; both may import from `acme_core`.
 - Full type hints everywhere; mypy runs in strict mode.
 - Ruff is the formatter and linter (line length 100). Don't add black, isort or flake8.
-- Every new feature or bug fix gets a pytest test.
+- Don't write tests unless the user explicitly asks for them.
 
 ### API
 - All routes live under the `/api` prefix (the web dev server proxies `/api/*` to the API).
