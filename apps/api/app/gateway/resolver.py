@@ -24,8 +24,8 @@ class AgentResolver(Protocol):
         """The agent's upstream, or None when the agent is unknown or the key is wrong."""
         ...
 
-    def base_url(self, agent_id: str) -> str | None:
-        """The agent's base URL for its public Agent Card, or None if it isn't served."""
+    def agent_card(self, agent_id: str) -> dict[str, Any] | None:
+        """The Agent Card stored at registration, or None if the agent isn't served."""
         ...
 
 
@@ -57,9 +57,9 @@ class SupabaseAgentResolver:
             auth_header_value=row.get("auth_header_value"),
         )
 
-    def base_url(self, agent_id: str) -> str | None:
-        data = self._call("gateway_agent_base_url", {"p_agent_id": agent_id})
-        return data if isinstance(data, str) else None
+    def agent_card(self, agent_id: str) -> dict[str, Any] | None:
+        data = self._call("gateway_agent_card", {"p_agent_id": agent_id})
+        return cast(dict[str, Any], data) if isinstance(data, dict) else None
 
 
 def get_agent_resolver() -> AgentResolver:

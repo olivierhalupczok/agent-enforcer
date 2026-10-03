@@ -28,8 +28,6 @@ export interface Agent {
   auth_header_name: string | null
   /** Null for agents registered before A2A. */
   agent_card: AgentCard | null
-  /** Absent until the backend supports attachments (FR-05). */
-  attached_rules?: RuleAttachment[]
   config_version?: number
 }
 
@@ -46,14 +44,6 @@ export interface AgentList {
   total: number
 }
 
-export interface RuleAttachment {
-  rule_id: string
-  rule_type: 'guardrail' | 'policy'
-  order_index: number
-}
-
-export type AgentRuleRef = Pick<RuleAttachment, 'rule_id' | 'rule_type'>
-
 /** PATCH /agents/{id} body (proposed, docs/api-contract-agents.md). */
 export interface AgentUpdate {
   name?: string
@@ -61,8 +51,15 @@ export interface AgentUpdate {
   base_url?: string
   /** Object replaces, null removes, omitted keeps. */
   auth_header?: { name: string; value: string } | null
-  /** Full list; array order is the execution order. */
-  attached_rules?: AgentRuleRef[]
+}
+
+/** POST /agents/{id}/gateway-key (B-01). The key is returned once; only its hash is stored. */
+export interface GatewayKey {
+  agent_id: string
+  key: string
+  /** Relative to the API root (not under /api/v1), e.g. "/a/{id}". */
+  gateway_path: string
+  agent_card_path: string
 }
 
 // --- guardrails and injection signatures (mirror apps/api/app/guardrails/models.py) ---
@@ -130,4 +127,75 @@ export interface DryRunResult {
 export interface InjectionSignature {
   id: string
   regex: string
+}
+
+// --- FR-05 bindings: mirror apps/api/app/bindings/models.py
+
+export type ScopeType = 'agent' | 'role' | 'user'
+
+export interface BindingCreate {
+  scope_type: ScopeType
+  scope_id: string
+  guardrail_id: string
+  order_index: number
+  enabled: boolean
+}
+
+export interface Binding extends BindingCreate {
+  id: string
+}
+
+export interface BindingUpdate {
+  order_index?: number
+  enabled?: boolean
+}
+
+export interface EffectiveGuardrail {
+  guardrail: Guardrail
+  source: 'mandatory' | ScopeType
+  binding_id: string | null
+  order_index: number
+}
+
+/** What the gateway enforces for an (agent, role, user) triple. */
+export interface EffectivePolicy {
+  agent_id: string | null
+  role: string | null
+  user_id: string | null
+  version: string
+  input: EffectiveGuardrail[]
+  output: EffectiveGuardrail[]
+}
+
+// --- MCP servers (FR-16, mirror apps/api/app/mcp/models.py) ---
+
+export type McpAuthType = 'none' | 'api_key' | 'oauth'
+
+/** What the API sends to register a server; secrets go in, never come back. */
+export type McpAuth =
+  | { type: 'none' }
+  | { type: 'api_key'; header: string; api_key: string }
+  | { type: 'oauth'; token_url: string; client_id: string; client_secret: string; scopes: string[] }
+
+export interface McpServerCreate {
+  name: string
+  url: string
+  auth: McpAuth
+  allowed_tools: string[]
+}
+
+export interface McpServer {
+  id: string
+  name: string
+  url: string
+  auth: {
+    type: McpAuthType
+    header?: string | null
+    client_id?: string | null
+    scopes: string[]
+    has_secret: boolean
+  }
+  allowed_tools: string[]
+  /** Agents using the server (filled in once FR-17 attaches servers to agents). */
+  agents: number
 }
