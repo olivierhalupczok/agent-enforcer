@@ -2,13 +2,19 @@ import { createClient, type Session } from '@supabase/supabase-js'
 import type { AuthClient, AuthSession } from './types'
 
 function toSession(session: Session | null): AuthSession | null {
-  return session ? { accessToken: session.access_token, email: session.user.email ?? '' } : null
+  return session
+    ? {
+        accessToken: session.access_token,
+        email: session.user.email ?? '',
+        anonymous: session.user.is_anonymous ?? false,
+      }
+    : null
 }
 
-/** Null when VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are not set. */
+/** Null when SUPABASE_URL / SUPABASE_KEY were not set at build time. */
 export function createAuthClient(): AuthClient | null {
-  const url = import.meta.env.VITE_SUPABASE_URL
-  const key = import.meta.env.VITE_SUPABASE_ANON_KEY
+  const url = import.meta.env.SUPABASE_URL
+  const key = import.meta.env.SUPABASE_KEY
   if (!url || !key) return null
   const { auth } = createClient(url, key)
   return {
@@ -26,6 +32,10 @@ export function createAuthClient(): AuthClient | null {
     },
     async signIn(email, password) {
       const { error } = await auth.signInWithPassword({ email, password })
+      return error ? error.message : null
+    },
+    async signInAnonymously() {
+      const { error } = await auth.signInAnonymously()
       return error ? error.message : null
     },
     async signOut() {

@@ -1,6 +1,7 @@
+from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from app.guardrails.evaluate import PatternTimeoutError, evaluate
 from app.guardrails.models import (
@@ -12,13 +13,16 @@ from app.guardrails.models import (
     GuardrailUpdate,
     TemplateInfo,
 )
+from app.guardrails.repository import GuardrailRepository, get_guardrail_repository
 from app.store import store
 
 router = APIRouter(tags=["guardrails"])
 
+Repo = Annotated[GuardrailRepository, Depends(get_guardrail_repository)]
 
-def _get_or_404(guardrail_id: str) -> Guardrail:
-    guardrail = store.guardrails.get(guardrail_id)
+
+def _get_or_404(repo: GuardrailRepository, guardrail_id: str) -> Guardrail:
+    guardrail = repo.get(guardrail_id)
     if guardrail is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Guardrail not found")
     return guardrail
@@ -30,14 +34,14 @@ def list_templates() -> list[TemplateInfo]:
 
 
 @router.get("/guardrails")
-def list_guardrails() -> list[Guardrail]:
-    return list(store.guardrails.values())
+def list_guardrails(repo: Repo) -> list[Guardrail]:
+    return repo.list()
 
 
 @router.post("/guardrails", status_code=status.HTTP_201_CREATED)
-def create_guardrail(body: GuardrailCreate) -> Guardrail:
+def create_guardrail(body: GuardrailCreate, repo: Repo) -> Guardrail:
     guardrail = Guardrail(id=f"gr-{uuid4().hex[:8]}", **body.model_dump())
-    store.guardrails[guardrail.id] = guardrail
+    repo.add(guardrail)
     return guardrail
 
 
@@ -53,20 +57,20 @@ def dry_run(body: DryRunRequest) -> DryRunResult:
 
 
 @router.get("/guardrails/{guardrail_id}")
-def get_guardrail(guardrail_id: str) -> Guardrail:
-    return _get_or_404(guardrail_id)
+def get_guardrail(guardrail_id: str, repo: Repo) -> Guardrail:
+    return _get_or_404(repo, guardrail_id)
 
 
 @router.patch("/guardrails/{guardrail_id}")
-def update_guardrail(guardrail_id: str, body: GuardrailUpdate) -> Guardrail:
-    current = _get_or_404(guardrail_id)
+def update_guardrail(guardrail_id: str, body: GuardrailUpdate, repo: Repo) -> Guardrail:
+    current = _get_or_404(repo, guardrail_id)
     updated = current.model_copy(update=body.model_dump(exclude_unset=True))
-    store.guardrails[guardrail_id] = updated
+    repo.replace(updated)
     return updated
 
 
 @router.delete("/guardrails/{guardrail_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_guardrail(guardrail_id: str) -> Response:
-    _get_or_404(guardrail_id)
-    del store.guardrails[guardrail_id]
+def delete_guardrail(guardrail_id: str, repo: Repo) -> Response:
+    if not repo.delete(guardrail_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Guardrail not found")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
