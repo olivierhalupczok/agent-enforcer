@@ -13,12 +13,12 @@ dependencies = [
     "uvicorn[standard]>=0.54.0",
 ]
 
-[project.scripts]
-acme-api = "acme_api:main"
-
 [build-system]
 requires = ["uv_build>=0.12.22,<0.13.0"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
 acme-core = { workspace = true }
+
+[tool.vercel]
+entrypoint = "acme_api.main:app"
