@@ -24,7 +24,7 @@ from app.store import store
 from supabase import Client
 
 TABLE = "guardrails"
-_COLUMNS = "id,name,description,engine,stages,action,config,enabled"
+_COLUMNS = "id,name,description,engine,stages,action,config,enabled,is_mandatory"
 
 T = TypeVar("T")
 

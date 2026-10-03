@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
+from app.bindings.repository import BindingRepository, get_binding_repository
 from app.guardrails.evaluate import PatternTimeoutError, evaluate
 from app.guardrails.models import (
     TEMPLATES,
@@ -19,6 +20,7 @@ from app.store import store
 router = APIRouter(tags=["guardrails"])
 
 Repo = Annotated[GuardrailRepository, Depends(get_guardrail_repository)]
+Bindings = Annotated[BindingRepository, Depends(get_binding_repository)]
 
 
 def _get_or_404(repo: GuardrailRepository, guardrail_id: str) -> Guardrail:
@@ -70,7 +72,8 @@ def update_guardrail(guardrail_id: str, body: GuardrailUpdate, repo: Repo) -> Gu
 
 
 @router.delete("/guardrails/{guardrail_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_guardrail(guardrail_id: str, repo: Repo) -> Response:
+def delete_guardrail(guardrail_id: str, repo: Repo, bindings: Bindings) -> Response:
     if not repo.delete(guardrail_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Guardrail not found")
+    bindings.delete_for_guardrail(guardrail_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 
+from app.bindings.models import Binding
 from app.guardrails.models import Guardrail, InjectionSignature
 from app.seeds import seed_guardrails, seed_signatures
 
@@ -10,6 +11,7 @@ from app.seeds import seed_guardrails, seed_signatures
 class Store:
     guardrails: dict[str, Guardrail] = field(default_factory=dict)
     signatures: dict[str, InjectionSignature] = field(default_factory=dict)
+    bindings: dict[str, Binding] = field(default_factory=dict)
 
 
 def _seeded() -> Store:
@@ -26,3 +28,4 @@ def reset_store() -> None:
     fresh = _seeded()
     store.guardrails = fresh.guardrails
     store.signatures = fresh.signatures
+    store.bindings = fresh.bindings
