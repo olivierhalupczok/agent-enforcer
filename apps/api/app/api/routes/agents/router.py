@@ -162,30 +162,7 @@ async def register_agent(
         else None
     )
     card, snapshot = await fetch_agent_card(client, registration.base_url, headers)
-
-    try:
-        request = client.build_request(
-            "GET",
-            upstream.url,
-            headers=headers,
-            extensions={"sni_hostname": upstream.sni_hostname},
-        )
-        request.headers["Host"] = upstream.host_header
-        response = await client.send(request)
-    except httpx.HTTPError as error:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Upstream agent did not respond successfully",
-        ) from error
-    # Any answer below 500 means the agent is up. A chat endpoint often only accepts POST,
-    # so a GET there answers 405 (e.g. the demo agent's /chat); that still counts as reachable.
-    if response.status_code >= 500:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Upstream agent did not respond successfully",
-        )
-
-    row = _database_row(agent_id, database.owner_id, registration)
+    row = _database_row(agent_id, database.owner_id, registration, card, snapshot)
     try:
         await run_in_threadpool(lambda: database.client.table("agents").insert(row).execute())
     except APIError as error:
