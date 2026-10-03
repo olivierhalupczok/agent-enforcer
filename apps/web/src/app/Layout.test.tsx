@@ -52,6 +52,23 @@ describe('phone drawer', () => {
     expectClosed()
   })
 
+  it('moves focus to the first nav link when opened', async () => {
+    await openMenu()
+    expect(screen.getByRole('link', { name: 'Fleet' })).toHaveFocus()
+  })
+
+  it('returns focus to the Menu button after Escape', async () => {
+    const user = await openMenu()
+    await user.keyboard('{Escape}')
+    expect(menuButton()).toHaveFocus()
+  })
+
+  it('returns focus to the Menu button after a backdrop click', async () => {
+    const user = await openMenu()
+    await user.click(screen.getByRole('button', { name: 'Close menu' }))
+    expect(menuButton()).toHaveFocus()
+  })
+
   it('toggles closed with the Menu button', async () => {
     const user = await openMenu()
     await user.click(menuButton())

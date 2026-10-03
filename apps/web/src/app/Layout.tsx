@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Outlet } from 'react-router'
 import { Brand } from './Brand'
 import { Sidebar } from './Sidebar'
@@ -7,22 +7,30 @@ const SIDEBAR_ID = 'app-sidebar'
 
 export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
   const closeMenu = useCallback(() => setMenuOpen(false), [])
+  // Esc and backdrop close the drawer without moving anywhere, so put focus back on Menu
+  const dismissMenu = useCallback(() => {
+    setMenuOpen(false)
+    menuButtonRef.current?.focus()
+  }, [])
 
   useEffect(() => {
     if (!menuOpen) return
+    document.getElementById(SIDEBAR_ID)?.querySelector('a')?.focus()
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMenuOpen(false)
+      if (event.key === 'Escape') dismissMenu()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [menuOpen])
+  }, [menuOpen, dismissMenu])
 
   return (
     <div className="min-h-screen bg-canvas text-ink md:flex">
       <header className="on-dark sticky top-0 z-20 flex h-14 items-center justify-between bg-sidebar px-2 md:hidden">
         <Brand />
         <button
+          ref={menuButtonRef}
           type="button"
           aria-expanded={menuOpen}
           aria-controls={SIDEBAR_ID}
@@ -36,7 +44,7 @@ export function Layout() {
         <button
           type="button"
           aria-label="Close menu"
-          onClick={closeMenu}
+          onClick={dismissMenu}
           className="fixed inset-0 z-30 cursor-default border-0 bg-black/40 md:hidden"
         />
       )}
