@@ -68,6 +68,23 @@ def _database_error() -> HTTPException:
     )
 
 
+def _agent_insert_error(error: APIError) -> HTTPException:
+    if error.code == "23505":
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An agent with this name already exists",
+        )
+    if error.code in {"22001", "22P02", "23502", "23514"}:
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Agent data violates database constraints",
+        )
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Could not save agent",
+    )
+
+
 @router.post("", response_model=Agent, status_code=status.HTTP_201_CREATED)
 async def register_agent(
     registration: AgentRegistration,
@@ -75,7 +92,7 @@ async def register_agent(
     database: Annotated[AgentDatabase, Depends(get_agent_database)],
 ) -> Agent:
     agent_id = str(uuid4())
-    await ensure_public_upstream(registration.upstream_url)
+    upstream = await ensure_public_upstream(registration.upstream_url)
     headers = (
         {
             registration.auth_header.name: registration.auth_header.value.get_secret_value(),
@@ -85,7 +102,14 @@ async def register_agent(
     )
 
     try:
-        response = await client.get(str(registration.upstream_url), headers=headers)
+        request = client.build_request(
+            "GET",
+            upstream.url,
+            headers=headers,
+            extensions={"sni_hostname": upstream.sni_hostname},
+        )
+        request.headers["Host"] = upstream.host_header
+        response = await client.send(request)
         response.raise_for_status()
     except httpx.HTTPError as error:
         raise HTTPException(
@@ -96,7 +120,9 @@ async def register_agent(
     row = _database_row(agent_id, database.owner_id, registration)
     try:
         await run_in_threadpool(lambda: database.client.table("agents").insert(row).execute())
-    except (APIError, httpx.HTTPError) as error:
+    except APIError as error:
+        raise _agent_insert_error(error) from error
+    except httpx.HTTPError as error:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Could not save agent",

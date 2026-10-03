@@ -1,7 +1,7 @@
 import socket
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from ipaddress import ip_address
+from ipaddress import IPv4Address, IPv6Address, ip_address
 from typing import Annotated
 
 import httpx
@@ -21,6 +21,15 @@ _bearer = HTTPBearer()
 class AgentDatabase:
     client: Client
     owner_id: str
+
+
+@dataclass(frozen=True)
+class ResolvedUpstream:
+    """A public upstream URL pinned to the IP address that was validated."""
+
+    url: httpx.URL
+    host_header: str
+    sni_hostname: str
 
 
 def get_agent_database(
@@ -50,8 +59,8 @@ def get_agent_database(
     return AgentDatabase(client=client, owner_id=str(user.id))
 
 
-async def ensure_public_upstream(url: HttpUrl) -> None:
-    """Reject upstreams resolving to local, private, or otherwise non-public addresses."""
+async def ensure_public_upstream(url: HttpUrl) -> ResolvedUpstream:
+    """Resolve and pin an upstream to a validated public IP address."""
     if url.username is not None or url.password is not None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -67,7 +76,7 @@ async def ensure_public_upstream(url: HttpUrl) -> None:
     host = host.removeprefix("[").removesuffix("]")
 
     try:
-        addresses = {ip_address(host)}
+        addresses: set[IPv4Address | IPv6Address] = {ip_address(host)}
     except ValueError:
         port = url.port or (443 if url.scheme == "https" else 80)
         try:
@@ -90,6 +99,16 @@ async def ensure_public_upstream(url: HttpUrl) -> None:
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Upstream URL must resolve only to public IP addresses",
         )
+
+    # The request connects to this exact address, not to the hostname again.
+    # This closes the DNS-rebinding gap between validation and connection.
+    address = sorted(addresses, key=lambda item: (item.version != 4, str(item)))[0]
+    original_url = httpx.URL(str(url))
+    return ResolvedUpstream(
+        url=original_url.copy_with(host=str(address)),
+        host_header=original_url.netloc.decode("ascii"),
+        sni_hostname=original_url.host,
+    )
 
 
 async def get_http_client() -> AsyncIterator[httpx.AsyncClient]:

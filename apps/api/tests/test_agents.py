@@ -1,4 +1,5 @@
 import asyncio
+import socket
 from collections.abc import AsyncIterator, Callable, Iterator
 from unittest.mock import MagicMock
 from uuid import UUID
@@ -8,6 +9,7 @@ import pytest
 from app.api.routes.agents import router as agents_router
 from app.api.routes.agents.deps import (
     AgentDatabase,
+    ResolvedUpstream,
     ensure_public_upstream,
     get_agent_database,
     get_http_client,
@@ -15,6 +17,7 @@ from app.api.routes.agents.deps import (
 from app.main import app
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from postgrest.exceptions import APIError
 from pydantic import HttpUrl
 
 client = TestClient(app)
@@ -32,8 +35,13 @@ def _client_override(
 
 @pytest.fixture(autouse=True)
 def reset_dependency_overrides(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    async def allow_test_upstream(_url: HttpUrl) -> None:
-        return None
+    async def allow_test_upstream(url: HttpUrl) -> ResolvedUpstream:
+        original = httpx.URL(str(url))
+        return ResolvedUpstream(
+            url=original.copy_with(host="93.184.216.34"),
+            host_header=original.netloc.decode("ascii"),
+            sni_hostname=original.host,
+        )
 
     monkeypatch.setattr(agents_router, "ensure_public_upstream", allow_test_upstream)
     yield
@@ -42,6 +50,8 @@ def reset_dependency_overrides(monkeypatch: pytest.MonkeyPatch) -> Iterator[None
 
 def test_register_agent_pings_upstream_and_hides_auth_value() -> None:
     def upstream(request: httpx.Request) -> httpx.Response:
+        assert request.url.host == "93.184.216.34"
+        assert request.headers["host"] == "agent.example.com"
         assert request.headers["authorization"] == "Bearer secret"
         return httpx.Response(204)
 
@@ -124,6 +134,83 @@ def test_register_agent_rejects_unreachable_upstream() -> None:
     assert response.json() == {
         "detail": "Upstream agent did not respond successfully",
     }
+    database_client.table.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("database_code", "expected_status", "expected_detail"),
+    [
+        ("23505", 409, "An agent with this name already exists"),
+        ("23514", 422, "Agent data violates database constraints"),
+    ],
+)
+def test_register_agent_maps_database_input_errors(
+    database_code: str,
+    expected_status: int,
+    expected_detail: str,
+) -> None:
+    def upstream(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(204)
+
+    database_client = MagicMock()
+    database_client.table.return_value.insert.return_value.execute.side_effect = APIError(
+        {"code": database_code, "message": "constraint violation"}
+    )
+    database = AgentDatabase(
+        client=database_client,
+        owner_id="971f4031-2dd9-4327-94c7-45323de61c67",
+    )
+    app.dependency_overrides[get_http_client] = _client_override(upstream)
+    app.dependency_overrides[get_agent_database] = lambda: database
+
+    response = client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Support agent",
+            "description": "",
+            "upstream_url": "https://agent.example.com/health",
+            "request_format": "json",
+            "response_format": "json",
+        },
+    )
+
+    assert response.status_code == expected_status
+    assert response.json() == {"detail": expected_detail}
+
+
+@pytest.mark.parametrize(
+    ("header_name", "header_value"),
+    [
+        ("Invalid Header", "secret"),
+        ("Host", "internal.example"),
+        ("Authorization", "Bearer secret\r\nX-Injected: true"),
+        ("Authorization", "Bearer żółć"),
+    ],
+)
+def test_register_agent_rejects_invalid_auth_headers(
+    header_name: str,
+    header_value: str,
+) -> None:
+    database_client = MagicMock()
+    database = AgentDatabase(
+        client=database_client,
+        owner_id="971f4031-2dd9-4327-94c7-45323de61c67",
+    )
+    app.dependency_overrides[get_agent_database] = lambda: database
+
+    response = client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Support agent",
+            "description": "",
+            "upstream_url": "https://agent.example.com/health",
+            "auth_header": {"name": header_name, "value": header_value},
+            "request_format": "json",
+            "response_format": "json",
+        },
+    )
+
+    assert response.status_code == 422
     database_client.table.assert_not_called()
 
 
@@ -245,3 +332,24 @@ def test_private_upstream_addresses_are_rejected(url: str) -> None:
 
     assert error.value.status_code == 422
     assert error.value.detail == "Upstream URL must resolve only to public IP addresses"
+
+
+def test_public_upstream_is_pinned_to_validated_address(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    records = [
+        (
+            socket.AF_INET,
+            socket.SOCK_STREAM,
+            socket.IPPROTO_TCP,
+            "",
+            ("93.184.216.34", 443),
+        )
+    ]
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *_args, **_kwargs: records)
+
+    resolved = asyncio.run(ensure_public_upstream(HttpUrl("https://agent.example.com/health")))
+
+    assert resolved.url == httpx.URL("https://93.184.216.34/health")
+    assert resolved.host_header == "agent.example.com"
+    assert resolved.sni_hostname == "agent.example.com"
