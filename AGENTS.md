@@ -9,6 +9,7 @@ Monorepo with three apps and one shared library:
 - `apps/cli` – Typer CLI (Python package `acme-cli`, module `acme_cli`, command `acme`)
 - `apps/web` – React + Vite + TypeScript frontend (pnpm project, NOT part of the uv workspace)
 - `packages/core` – shared Python library (package `acme-core`, module `acme_core`) used by API and CLI
+- `packages/pi-control-layer` – the AI Control Layer pi extension (`control-layer.ts`), its policy format (`policy.schema.json`) and an example policy (`policy.json`). It enforces policy on agent tool calls and reports audit events to the control plane over websocket.
 
 Python code is a single uv workspace: one `uv.lock` and one `.venv` at the repo root. Python 3.12.
 
@@ -46,6 +47,12 @@ cd apps/web && pnpm build         # type-check + production build
 ### API
 - All routes live under the `/api` prefix (the web dev server proxies `/api/*` to the API).
 - Use Pydantic models for request and response bodies, not raw dicts, for anything beyond trivial endpoints.
+
+### Control layer (`packages/pi-control-layer`)
+- This package is the source of truth for the pi enforcement extension and the policy format. Reuse it; don't reimplement policy types, matching or enforcement logic elsewhere.
+- Any code that reads, writes, validates or displays policies (API, CLI, web) must follow `policy.schema.json`. Mirror its field names and semantics: `defaults` plus per-agent `agents` overrides, section-level override, lists replace and never merge.
+- When the policy format changes, update `policy.schema.json`, the types in `control-layer.ts` and the example `policy.json` together, then update every consumer.
+- Use `policy.json` as the fixture or seed data for policy-related features and tests.
 
 ### Web
 - Use **pnpm** only. Never use `npm` or `yarn`; never create `package-lock.json` or `yarn.lock`.
