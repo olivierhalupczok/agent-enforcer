@@ -1,12 +1,13 @@
 """B-01 gateway: guarded Agent Card, key check, SendMessage forwarding, errors.
 
-The upstream in most tests is a real A2A 1.0 agent built with the official a2a-sdk (an echo
-agent, standing in for apps/test-agent), reached in-process. The guarded URL is then called
-both with plain JSON-RPC and with the official a2a-sdk client.
+The upstream in most tests is the real apps/test-agent, reached in-process. The guarded URL is
+then called both with plain JSON-RPC and with the official a2a-sdk client.
 """
 
 import json
+import sys
 from collections.abc import AsyncIterator, Callable, Iterator
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -19,21 +20,23 @@ from a2a.client import (
     InMemoryContextCredentialStore,
     create_client,
 )
-from a2a.helpers.proto_helpers import new_text_message
-from a2a.server.agent_execution import AgentExecutor, RequestContext
-from a2a.server.events import EventQueue
-from a2a.server.request_handlers import DefaultRequestHandler
-from a2a.server.routes import create_agent_card_routes, create_jsonrpc_routes
-from a2a.server.tasks import InMemoryTaskStore
 from a2a.types import a2a_pb2 as a2a_types
 from app.api.routes.agents.deps import AgentDatabase, ResolvedUpstream, get_agent_database
+from app.bindings.models import EffectivePolicy
+from app.bindings.resolve import resolve
 from app.gateway import router as gateway_router
 from app.gateway.keys import KEY_PREFIX, hash_key
+from app.gateway.policy import get_policy_loader
 from app.gateway.resolver import SupabaseAgentResolver, UpstreamTarget, get_agent_resolver
 from app.main import app
 from fastapi.testclient import TestClient
 from pydantic import HttpUrl
-from starlette.applications import Starlette
+
+# apps/test-agent is a separate project (root uv workspace); it needs only FastAPI, so the
+# API's tests load it straight from its source folder.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "test-agent" / "src"))
+from acme_test_agent.app import agent_card as card_of_test_agent  # noqa: E402
+from acme_test_agent.app import create_app as create_test_agent  # noqa: E402
 
 client = TestClient(app)
 
@@ -53,43 +56,12 @@ SEND = {
     },
 }
 
-# --- a reference A2A 1.0 agent, built with the official SDK ------------------------------
-
-UPSTREAM_CARD = a2a_types.AgentCard(
-    name="Echo agent",
-    description="Repeats what you say",
-    version="1.0.0",
-    supported_interfaces=[
-        a2a_types.AgentInterface(
-            url=f"{BASE_URL}/rpc", protocol_binding="JSONRPC", protocol_version="1.0"
-        )
-    ],
-    capabilities=a2a_types.AgentCapabilities(streaming=True, push_notifications=True),
-    default_input_modes=["text/plain"],
-    default_output_modes=["text/plain"],
-    skills=[a2a_types.AgentSkill(id="echo", name="Echo", description="Echo", tags=["demo"])],
-)
+UPSTREAM_AUTH = "Bearer upstream-secret"
 
 
-class EchoAgent(AgentExecutor):
-    async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
-        reply = new_text_message("echo: " + context.get_user_input(), context_id=context.context_id)
-        await event_queue.enqueue_event(reply)
-
-    async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
-        raise NotImplementedError
-
-
-def reference_agent() -> Starlette:
-    handler = DefaultRequestHandler(
-        agent_executor=EchoAgent(), task_store=InMemoryTaskStore(), agent_card=UPSTREAM_CARD
-    )
-    return Starlette(
-        routes=[
-            *create_agent_card_routes(UPSTREAM_CARD),
-            *create_jsonrpc_routes(handler, rpc_url="/rpc"),
-        ]
-    )
+def make_test_agent() -> Any:
+    """apps/test-agent, requiring the agent's own key like a real deployment would."""
+    return create_test_agent(auth_value=UPSTREAM_AUTH, public_url=BASE_URL)
 
 
 # --- wiring ---------------------------------------------------------------------------------
@@ -104,13 +76,21 @@ class FakeResolver:
         if agent_id != AGENT_ID or key != GOOD_KEY:
             return None
         return UpstreamTarget(
-            upstream_url=BASE_URL,
+            upstream_url=f"{BASE_URL}/a2a",  # the card's JSON-RPC endpoint, saved at registration
             auth_header_name="Authorization",
-            auth_header_value="Bearer upstream-secret",
+            auth_header_value=UPSTREAM_AUTH,
         )
 
-    def base_url(self, agent_id: str) -> str | None:
-        return BASE_URL if agent_id == AGENT_ID else None
+    def agent_card(self, agent_id: str) -> dict[str, Any] | None:
+        # The snapshot registration stores: the test agent's own card.
+        return card_of_test_agent(BASE_URL, "Authorization") if agent_id == AGENT_ID else None
+
+
+class NoGuardrails:
+    """B-01's behaviour: no guardrails attached (B-02's tests attach some)."""
+
+    def load(self, agent_id: str, key: str) -> EffectivePolicy:
+        return resolve([], [], agent_id=agent_id)
 
 
 class Recorder(httpx.AsyncBaseTransport):
@@ -138,15 +118,7 @@ def use_upstream(transport: httpx.AsyncBaseTransport) -> None:
 
 
 def scripted_upstream(rpc: Callable[[httpx.Request], httpx.Response]) -> None:
-    """The upstream card from the SDK agent, and JSON-RPC answers from `rpc`."""
-    card = json.loads(TestClient(reference_agent()).get("/.well-known/agent-card.json").content)
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/.well-known/agent-card.json":
-            return httpx.Response(200, json=card)
-        return rpc(request)
-
-    use_upstream(httpx.MockTransport(handler))
+    use_upstream(httpx.MockTransport(rpc))
 
 
 @pytest.fixture(autouse=True)
@@ -162,6 +134,7 @@ def setup(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeResolver]:
     monkeypatch.setattr(gateway_router, "ensure_public_upstream", allow_test_upstream)
     resolver = FakeResolver()
     app.dependency_overrides[get_agent_resolver] = lambda: resolver
+    app.dependency_overrides[get_policy_loader] = NoGuardrails
     yield resolver
     app.dependency_overrides.clear()
 
@@ -174,15 +147,15 @@ def post(body: Any = SEND, key: str | None = GOOD_KEY, agent_id: str = AGENT_ID)
 # --- the guarded Agent Card -----------------------------------------------------------------
 
 
-def test_agent_card_is_rewritten_for_the_gateway() -> None:
-    use_upstream(httpx.ASGITransport(app=reference_agent()))
+def card_of_test_agent_is_rewritten_for_the_gateway() -> None:
+    use_upstream(httpx.ASGITransport(app=make_test_agent()))
 
     r = client.get(f"/a/{AGENT_ID}/.well-known/agent-card.json")
 
     assert r.status_code == 200
     card = r.json()
-    assert card["name"] == "Echo agent"
-    assert card["skills"][0]["id"] == "echo"
+    assert card["name"] == "test-agent"
+    assert {skill["id"] for skill in card["skills"]} >= {"pii", "echo"}
     assert card["supportedInterfaces"] == [
         {
             "url": f"http://testserver/a/{AGENT_ID}",
@@ -193,19 +166,13 @@ def test_agent_card_is_rewritten_for_the_gateway() -> None:
     assert card["capabilities"]["streaming"] is False
     assert card["capabilities"]["pushNotifications"] is False
     assert card["securitySchemes"] == {
-        "apiKey": {
-            "apiKeySecurityScheme": {
-                "location": "header",
-                "name": "X-API-Key",
-                "description": "The deployment's gateway key",
-            }
-        }
+        "hubKey": {"apiKeySecurityScheme": {"location": "header", "name": "X-API-Key"}}
     }
-    assert card["securityRequirements"] == [{"schemes": {"apiKey": {}}}]
+    assert card["securityRequirements"] == [{"schemes": {"hubKey": {"list": []}}}]
     assert "agent.example.com" not in r.text  # the upstream address never leaks
 
 
-def test_agent_card_of_an_unknown_agent_is_404() -> None:
+def card_of_test_agent_of_an_unknown_agent_is_404() -> None:
     assert client.get("/a/not-a-uuid/.well-known/agent-card.json").status_code == 404
     other = "00000000-0000-0000-0000-000000000000"
     assert client.get(f"/a/{other}/.well-known/agent-card.json").status_code == 404
@@ -215,16 +182,15 @@ def test_agent_card_of_an_unknown_agent_is_404() -> None:
 
 
 def test_agent_answers_unchanged_through_the_gateway() -> None:
-    upstream = Recorder(httpx.ASGITransport(app=reference_agent()))
+    upstream = Recorder(httpx.ASGITransport(app=make_test_agent()))
     use_upstream(upstream)
 
     r = post()
 
     assert r.status_code == 200
-    assert r.json()["result"]["message"]["parts"] == [{"text": "echo: Where is my order #48213?"}]
-    card_request, rpc_request = upstream.requests
-    assert card_request.url.path == "/.well-known/agent-card.json"
-    assert rpc_request.url == f"{BASE_URL}/rpc"  # the interface from the upstream's card
+    assert r.json()["result"]["message"]["parts"] == [{"text": "Echo: Where is my order #48213?"}]
+    [rpc_request] = upstream.requests  # one call: no card fetch on the hot path
+    assert rpc_request.url == f"{BASE_URL}/a2a"  # the endpoint stored at registration
     assert rpc_request.headers["a2a-version"] == "1.0"
     assert rpc_request.headers["authorization"] == "Bearer upstream-secret"  # the agent's key
     assert "x-api-key" not in rpc_request.headers  # never the caller's gateway key
@@ -237,9 +203,9 @@ def test_agent_answers_unchanged_through_the_gateway() -> None:
 
 @pytest.mark.anyio
 async def test_official_a2a_sdk_client_talks_to_the_guarded_url() -> None:
-    use_upstream(httpx.ASGITransport(app=reference_agent()))
+    use_upstream(httpx.ASGITransport(app=make_test_agent()))
     credentials = InMemoryContextCredentialStore()
-    await credentials.set_credentials("session-1", "apiKey", GOOD_KEY)
+    await credentials.set_credentials("session-1", "hubKey", GOOD_KEY)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
@@ -259,7 +225,7 @@ async def test_official_a2a_sdk_client_talks_to_the_guarded_url() -> None:
         context = ClientCallContext(state={"sessionId": "session-1"})
         replies = [reply async for reply in sdk_client.send_message(request, context=context)]
 
-    assert [part.text for part in replies[0].message.parts] == ["echo: hello"]
+    assert [part.text for part in replies[0].message.parts] == ["Echo: hello"]
 
 
 # --- AC: a wrong or missing key returns 401 ---------------------------------------------------
@@ -289,10 +255,19 @@ def test_key_only_counts_in_x_api_key() -> None:
 # --- AC: upstream errors pass through; an unreachable upstream is -32603 ------------------
 
 
+def send(text: str) -> dict[str, Any]:
+    body = json.loads(json.dumps(SEND))
+    body["params"]["message"]["parts"] = [{"text": text}]
+    return body
+
+
 def test_upstream_jsonrpc_errors_pass_through() -> None:
-    error = {"jsonrpc": "2.0", "id": 1, "error": {"code": -32001, "message": "Task not found"}}
-    scripted_upstream(lambda _r: httpx.Response(200, json=error))
-    assert post().json() == error
+    use_upstream(httpx.ASGITransport(app=make_test_agent()))
+    assert post(send("#error")).json() == {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "error": {"code": -32603, "message": "Simulated agent failure (#error)"},
+    }
 
 
 def test_unreachable_upstream_is_32603() -> None:
@@ -302,11 +277,18 @@ def test_unreachable_upstream_is_32603() -> None:
     use_upstream(httpx.MockTransport(down))
     r = post()
     assert r.status_code == 200
-    assert r.json()["error"]["code"] == -32603
-    assert r.json()["id"] == 1
+    assert r.json() == {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "error": {
+            "code": -32603,
+            "message": "Upstream agent could not be reached",
+            "data": {"reason": "unreachable"},
+        },
+    }
 
 
-def test_slow_upstream_is_32603() -> None:
+def test_slow_upstream_is_32603_with_reason_timeout() -> None:
     def slow(request: httpx.Request) -> httpx.Response:
         raise httpx.ReadTimeout("too slow", request=request)
 
@@ -314,27 +296,28 @@ def test_slow_upstream_is_32603() -> None:
     assert post().json()["error"] == {
         "code": -32603,
         "message": "Upstream agent did not answer in time",
+        "data": {"reason": "timeout"},
     }
+
+
+def test_crashing_upstream_is_32603() -> None:
+    use_upstream(httpx.ASGITransport(app=make_test_agent()))
+    error = post(send("#crash")).json()["error"]
+    assert error["code"] == -32603
+    assert error["data"] == {"reason": "invalid_response"}
 
 
 def test_unfinished_task_is_an_invalid_response() -> None:
-    working = {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "result": {"task": {"id": "t-1", "status": {"state": "TASK_STATE_WORKING"}}},
-    }
-    scripted_upstream(lambda _r: httpx.Response(200, json=working))
-    assert post().json()["error"]["code"] == -32603
+    use_upstream(httpx.ASGITransport(app=make_test_agent()))
+    error = post(send("#working")).json()["error"]
+    assert error["code"] == -32603
+    assert error["data"] == {"reason": "invalid_response"}
 
 
 def test_finished_task_passes_through() -> None:
-    done = {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "result": {"task": {"id": "t-1", "status": {"state": "TASK_STATE_COMPLETED"}}},
-    }
-    scripted_upstream(lambda _r: httpx.Response(200, json=done))
-    assert post().json() == done
+    use_upstream(httpx.ASGITransport(app=make_test_agent()))
+    task = post(send("#task hello")).json()["result"]["task"]
+    assert task["status"]["state"] == "TASK_STATE_COMPLETED"
 
 
 # --- only SendMessage -------------------------------------------------------------------------
@@ -379,14 +362,15 @@ def test_supabase_resolver_sends_only_the_key_hash() -> None:
     assert SupabaseAgentResolver(database).resolve(AGENT_ID, "gk_wrong") is None
 
 
-def test_supabase_resolver_base_url_for_the_public_card() -> None:
+def test_supabase_resolver_reads_the_stored_card() -> None:
+    card = card_of_test_agent(BASE_URL, None)
     database = MagicMock()
-    database.rpc.return_value.execute.return_value.data = BASE_URL
-    assert SupabaseAgentResolver(database).base_url(AGENT_ID) == BASE_URL
-    database.rpc.assert_called_once_with("gateway_agent_base_url", {"p_agent_id": AGENT_ID})
+    database.rpc.return_value.execute.return_value.data = card
+    assert SupabaseAgentResolver(database).agent_card(AGENT_ID) == card
+    database.rpc.assert_called_once_with("gateway_agent_card", {"p_agent_id": AGENT_ID})
 
     database.rpc.return_value.execute.return_value.data = None
-    assert SupabaseAgentResolver(database).base_url(AGENT_ID) is None
+    assert SupabaseAgentResolver(database).agent_card(AGENT_ID) is None
 
 
 def test_owner_creates_a_gateway_key_and_only_its_hash_is_stored() -> None:
