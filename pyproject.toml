@@ -16,7 +16,9 @@ dev = [
 package = false
 
 [tool.uv.workspace]
-members = ["apps/api", "apps/cli", "packages/*"]
+members = ["apps/cli", "packages/*"]
+exclude = ["apps/api"]
+
 
 [tool.ruff]
 line-length = 100
@@ -26,7 +28,7 @@ target-version = "py312"
 select = ["E", "F", "I", "B", "UP", "SIM"]
 
 [tool.pytest.ini_options]
-testpaths = ["apps", "packages"]
+testpaths = ["packages", "apps/cli"]
 
 [tool.mypy]
 strict = true

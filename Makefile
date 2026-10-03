@@ -5,7 +5,7 @@ install:
 	cd apps/web && pnpm install
 
 api:
-	uv run --package acme-api uvicorn acme_api.main:app --reload --port 8000
+	cd apps/api && uv run uvicorn app.main:app --reload --port 8000
 
 web:
 	cd apps/web && pnpm dev
