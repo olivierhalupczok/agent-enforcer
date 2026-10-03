@@ -1,8 +1,7 @@
 from datetime import UTC, datetime
 
-from supabase import Client
-
 from app.core.supabase import get_supabase as _get_supabase
+from supabase import Client
 
 
 def get_timestamp() -> str:
