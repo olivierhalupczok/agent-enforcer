@@ -20,4 +20,4 @@ build-backend = "uv_build"
 acme-core = { workspace = true }
 
 [tool.vercel]
-entrypoint = "index:app"
+entrypoint = "src.acme_api.main:app"
