@@ -1,0 +1,24 @@
+[project]
+name = "acme-api"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Tamila Tiurina", email = "tamila.tiurina@xperi.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "acme-core",
+    "fastapi>=0.142.2",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[project.scripts]
+acme-api = "acme_api:main"
+
+[build-system]
+requires = ["uv_build>=0.12.22,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+acme-core = { workspace = true }
