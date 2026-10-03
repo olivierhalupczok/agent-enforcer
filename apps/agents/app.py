@@ -15,7 +15,7 @@ and an internal note, so it will leak them when asked. That is the
 """
 
 import os
-from typing import Literal, Optional
+from typing import Literal
 
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -37,8 +37,12 @@ AGENT_NAME = os.getenv("AGENT_NAME", "Support Assistant")
 SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT") or DEFAULT_PROMPT
 MODEL = os.getenv("MODEL", "claude-haiku-4-5-20251001")
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", "1024"))
-AGENT_API_KEY = os.getenv("AGENT_API_KEY")  # optional; if set, callers must send it as a Bearer token
-MOCK = os.getenv("MOCK", "0") == "1"  # canned replies, no LLM call; handy offline or without an API key
+AGENT_API_KEY = os.getenv(
+    "AGENT_API_KEY"
+)  # optional; if set, callers must send it as a Bearer token
+MOCK = (
+    os.getenv("MOCK", "0") == "1"
+)  # canned replies, no LLM call; handy offline or without an API key
 
 app = FastAPI(title=AGENT_NAME)
 _client = None
@@ -51,7 +55,7 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[Message] = Field(min_length=1)
-    context: Optional[str] = None  # extra knowledge the hub injects (FR-14)
+    context: str | None = None  # extra knowledge the hub injects (FR-14)
 
 
 class ChatResponse(BaseModel):
@@ -68,7 +72,7 @@ def llm():
     return _client
 
 
-def check_auth(authorization: Optional[str]) -> None:
+def check_auth(authorization: str | None) -> None:
     if AGENT_API_KEY and authorization != f"Bearer {AGENT_API_KEY}":
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
@@ -92,7 +96,7 @@ def health():
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest, authorization: Optional[str] = Header(default=None)):
+def chat(req: ChatRequest, authorization: str | None = Header(default=None)):
     check_auth(authorization)
     if req.messages[-1].role != "user":
         raise HTTPException(status_code=400, detail="The last message must come from the user")
