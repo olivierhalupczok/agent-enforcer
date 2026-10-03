@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, configure } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, vi } from 'vitest'
-import { resetDb } from '../mocks/db'
+import { setAccessTokenProvider, setUnauthorizedHandler } from '../api/client'
 import { resetFakeApi } from './fakeApi'
 import { server } from './server'
 
@@ -14,8 +14,9 @@ beforeAll(() => server.listen({ onUnhandledFrame: 'error' }))
 afterEach(() => {
   cleanup()
   server.resetHandlers()
-  resetDb()
   resetFakeApi()
+  setAccessTokenProvider(() => null)
+  setUnauthorizedHandler(null)
   vi.restoreAllMocks()
   localStorage.clear()
 })

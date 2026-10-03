@@ -1,4 +1,4 @@
 interface ImportMetaEnv {
-  // "false" disables the MSW mock API and uses the real /api backend.
-  readonly VITE_API_MOCK?: string
+  readonly VITE_SUPABASE_URL?: string
+  readonly VITE_SUPABASE_ANON_KEY?: string
 }
