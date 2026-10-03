@@ -8,7 +8,6 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "acme-core",
     "fastapi>=0.142.2",
     "uvicorn[standard]>=0.54.0",
 ]
