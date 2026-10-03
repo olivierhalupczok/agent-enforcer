@@ -110,12 +110,18 @@ async def register_agent(
         )
         request.headers["Host"] = upstream.host_header
         response = await client.send(request)
-        response.raise_for_status()
     except httpx.HTTPError as error:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Upstream agent did not respond successfully",
         ) from error
+    # Any answer below 500 means the agent is up. A chat endpoint often only accepts POST,
+    # so a GET there answers 405 (e.g. the demo agent's /chat); that still counts as reachable.
+    if response.status_code >= 500:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Upstream agent did not respond successfully",
+        )
 
     row = _database_row(agent_id, database.owner_id, registration)
     try:
