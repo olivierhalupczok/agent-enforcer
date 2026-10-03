@@ -140,13 +140,8 @@ class Guardrail(GuardrailCreate):
     enabled: bool = True
     is_mandatory: bool = Field(
         default=False,
-        description="If True, applies to all agents globally and cannot be detached"
+        description="If True, applies to all agents globally and cannot be detached",
     )
-
-    is_mandatory: bool = Field(   #now mandartory
-        default=False,
-        description="If True, applies to all agents globally and cannot be detached"
-    ) 
 
 
 class GuardrailUpdate(BaseModel):

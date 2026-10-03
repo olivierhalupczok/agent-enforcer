@@ -29,6 +29,7 @@ PII_ROW: dict[str, Any] = {
     "action": "redact",
     "config": {"template": "pii", "entities": ["EMAIL"]},
     "enabled": True,
+    "is_mandatory": False,
 }
 
 

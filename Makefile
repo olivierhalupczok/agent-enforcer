@@ -16,7 +16,7 @@ cli:
 	uv run acme --help
 
 lint:
-	uv run ruff check . && uv run ruff format --check . && uv run mypy apps packages
+	uv run ruff check . && uv run ruff format --check . && uv run mypy apps/cli packages
 
 test:
 	uv run pytest
