@@ -17,8 +17,9 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 
 class GatewayKey(BaseModel):
     agent_id: str
-    key: str  # shown only once; store it now
+    key: str  # shown only once; store it now. Callers send it in the X-API-Key header.
     gateway_path: str
+    agent_card_path: str
 
 
 @router.post("/{agent_id}/gateway-key", status_code=status.HTTP_201_CREATED)
@@ -44,4 +45,9 @@ async def create_gateway_key(
     # RLS: updating someone else's agent changes no rows, which looks the same as "not found".
     if not response.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Agent not found")
-    return GatewayKey(agent_id=str(agent_id), key=key, gateway_path=f"/a/{agent_id}")
+    return GatewayKey(
+        agent_id=str(agent_id),
+        key=key,
+        gateway_path=f"/a/{agent_id}",
+        agent_card_path=f"/a/{agent_id}/.well-known/agent-card.json",
+    )

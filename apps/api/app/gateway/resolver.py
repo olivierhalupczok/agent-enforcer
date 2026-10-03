@@ -24,6 +24,10 @@ class AgentResolver(Protocol):
         """The agent's upstream, or None when the agent is unknown or the key is wrong."""
         ...
 
+    def base_url(self, agent_id: str) -> str | None:
+        """The agent's base URL for its public Agent Card, or None if it isn't served."""
+        ...
+
 
 class SupabaseAgentResolver:
     """Calls the gateway_resolve_agent database function (see the agents_gateway_key migration)."""
@@ -31,17 +35,19 @@ class SupabaseAgentResolver:
     def __init__(self, client: Client) -> None:
         self._client = client
 
-    def resolve(self, agent_id: str, key: str) -> UpstreamTarget | None:
+    def _call(self, function: str, params: dict[str, str]) -> Any:
         try:
-            response = self._client.rpc(
-                "gateway_resolve_agent",
-                {"p_agent_id": agent_id, "p_key_hash": hash_key(key)},
-            ).execute()
+            return self._client.rpc(function, params).execute().data
         except (APIError, httpx.HTTPError) as error:
             raise HTTPException(
                 status.HTTP_503_SERVICE_UNAVAILABLE, "Gateway could not look up the agent"
             ) from error
-        rows = cast(list[dict[str, Any]], response.data or [])
+
+    def resolve(self, agent_id: str, key: str) -> UpstreamTarget | None:
+        data = self._call(
+            "gateway_resolve_agent", {"p_agent_id": agent_id, "p_key_hash": hash_key(key)}
+        )
+        rows = cast(list[dict[str, Any]], data or [])
         if not rows:
             return None
         row = rows[0]
@@ -50,6 +56,10 @@ class SupabaseAgentResolver:
             auth_header_name=row.get("auth_header_name"),
             auth_header_value=row.get("auth_header_value"),
         )
+
+    def base_url(self, agent_id: str) -> str | None:
+        data = self._call("gateway_agent_base_url", {"p_agent_id": agent_id})
+        return data if isinstance(data, str) else None
 
 
 def get_agent_resolver() -> AgentResolver:
