@@ -2,7 +2,6 @@ import type {
   AgentPolicy,
   BudgetSection,
   CommandRule,
-  IdentitySection,
   InjectionSection,
   SystemPromptSection,
   TimeSection,
@@ -21,7 +20,7 @@ interface AgentPolicyEditorProps {
   headerActions?: React.ReactNode
 }
 
-// Editor for one agentPolicy: identity + rule lists + scalar limit sections.
+// Editor for one agentPolicy: rule lists + scalar limit sections.
 export function AgentPolicyEditor({ value, disabled, onChange, headerActions }: AgentPolicyEditorProps) {
   const set = <K extends keyof AgentPolicy>(key: K, next: AgentPolicy[K]) =>
     onChange({ ...value, [key]: next })
@@ -88,21 +87,6 @@ export function AgentPolicyEditor({ value, disabled, onChange, headerActions }: 
     <div className="flex flex-col gap-4">
       {headerActions && <div className="flex justify-end">{headerActions}</div>}
 
-      <fieldset className="m-0 rounded-lg border border-line bg-canvas/60 p-3">
-        <legend className="px-1 text-[13px] font-semibold">{sectionLabel('identity')}</legend>
-        <label className="flex max-w-md flex-col gap-1">
-          <span className={labelClass}>Owner</span>
-          <input
-            className={inputClass}
-            disabled={disabled}
-            value={value.identity?.owner ?? ''}
-            placeholder="team or operator"
-            onChange={(e) =>
-              set('identity', e.target.value ? ({ owner: e.target.value } as IdentitySection) : undefined)
-            }
-          />
-        </label>
-      </fieldset>
 
       {/* commands */}
       <fieldset className="m-0 rounded-lg border border-line bg-canvas/60 p-3">

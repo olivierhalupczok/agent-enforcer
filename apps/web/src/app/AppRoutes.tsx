@@ -61,9 +61,9 @@ export function AppRoutes() {
         ) : (
           <>
             {role !== 'tester' && <Route path="/agents/:agentId" element={<AgentPage />} />}
-            {/* /policies and /playground belong to agent mode; stray panel deep links go home */}
-            <Route path="/policies" element={<Navigate to={homeFor(role, mode)} replace />} />
-            <Route path="/playground" element={<Navigate to={homeFor(role, mode)} replace />} />
+            {/* /playground works in panel mode too: the page itself is
+                mode-agnostic, so deep links land on it without a mode switch */}
+            <Route path="/playground" element={<PlaygroundPage />} />
             <Route path="*" element={<Navigate to={homeFor(role, mode)} replace />} />
           </>
         )}

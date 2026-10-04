@@ -107,7 +107,7 @@ describe('AppRoutes', () => {
 
   it('switching to Agent Integrated goes to the playground and back to Agent Wrapped goes to Sessions', async () => {
     const user = userEvent.setup()
-    renderApp('/fleet')
+    renderApp('/sessions')
     await user.click(screen.getByRole('button', { name: 'Agent Integrated' }))
     expect(location()).toBe('/playground')
     await user.click(screen.getByRole('button', { name: 'Agent Wrapped' }))

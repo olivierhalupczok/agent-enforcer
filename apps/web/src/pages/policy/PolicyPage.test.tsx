@@ -170,13 +170,13 @@ describe('PolicyPage', () => {
     expect(fakePiPolicy.policy.agents?.['new-host']).toBeUndefined() // not saved yet
   })
 
-  it('edits owner, shows schema defaults, and enforces time minimums', async () => {
+  it('edits a limit, shows schema defaults, and enforces time minimums', async () => {
     const user = userEvent.setup()
     renderApp('/policies', undefined, { mode: 'agent' })
     const defaults = await screen.findByRole('region', { name: 'Global rules' })
 
-    await user.type(within(defaults).getByLabelText('Owner'), 'security-platform')
-    expect(within(defaults).getByLabelText('Owner')).toHaveValue('security-platform')
+    await user.type(within(defaults).getByLabelText('Max session cost (USD)'), '1.5')
+    expect(within(defaults).getByLabelText('Max session cost (USD)')).toHaveValue(1.5)
     expect(within(defaults).getByRole('option', { name: 'default (warn)' })).toBeInTheDocument()
     expect(within(defaults).getByLabelText('Max turn seconds')).toHaveAttribute('min', '1')
     expect(within(defaults).getAllByText('No rules in this list.').length).toBeGreaterThan(0)
@@ -187,13 +187,13 @@ describe('PolicyPage', () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
     renderApp('/policies', undefined, { mode: 'agent' })
     const defaults = await screen.findByRole('region', { name: 'Global rules' })
-    await user.type(within(defaults).getByLabelText('Owner'), 'ops')
+    await user.type(within(defaults).getByLabelText('Max session cost (USD)'), '2')
 
     const beforeUnload = new Event('beforeunload', { cancelable: true })
     expect(window.dispatchEvent(beforeUnload)).toBe(false)
     await user.click(screen.getByRole('button', { name: 'Reload' }))
 
     expect(confirm).toHaveBeenCalledWith('Reload and discard your unsaved policy changes?')
-    expect(within(defaults).getByLabelText('Owner')).toHaveValue('ops')
+    expect(within(defaults).getByLabelText('Max session cost (USD)')).toHaveValue(2)
   })
 })

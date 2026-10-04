@@ -30,8 +30,10 @@ export function Sidebar({ id, open, onNavigate, counts = {} }: SidebarProps) {
 
   const pickMode = (next: Mode) => {
     if (next !== mode) {
-      setMode(next)
+      // navigate first: leaving /playground before the mode flips, so the
+      // PlaygroundRedirect doesn't yank the visitor back into agent mode
       navigate(next === 'agent' ? AGENT_HOME : DEFAULT_HOME)
+      setMode(next)
     }
     onNavigate()
   }
