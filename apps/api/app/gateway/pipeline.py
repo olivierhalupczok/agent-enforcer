@@ -21,6 +21,8 @@ from pydantic.alias_generators import to_camel
 from app.bindings.models import EffectiveGuardrail, Source
 from app.gateway.a2a import Json, checked_text, text_parts
 from app.guardrails.evaluate import GuardrailContext, evaluate
+from app.guardrails.evaluate import evaluate
+from app.guardrails.judge import Judge
 from app.guardrails.models import DryRunResult, Engine, Guardrail, Stage
 from app.store import store
 
@@ -40,8 +42,11 @@ class GuardrailEngine(Protocol):
 
 
 class LocalEngine:
-    """Stand-in until E-02: the dry-run checks (regex, PII and signatures are real; LLM judge
-    and moderation are heuristics and say so with simulated=True)."""
+    """The dry-run checks: regex, PII and signatures are real; the LLM judge is real when a judge
+    is given, otherwise it and moderation are heuristics and say so with simulated=True."""
+
+    def __init__(self, judge: Judge | None = None) -> None:
+        self._judge = judge
 
     def check(
         self,
@@ -51,6 +56,8 @@ class LocalEngine:
         context: GuardrailContext | None = None,
     ) -> DryRunResult:
         return evaluate(guardrail, text, list(store.signatures.values()), context)
+    def check(self, guardrail: Guardrail, text: str, stage: Stage) -> DryRunResult:
+        return evaluate(guardrail, text, list(store.signatures.values()), self._judge)
 
 
 class TraceEntry(BaseModel):

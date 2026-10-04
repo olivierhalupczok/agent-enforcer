@@ -9,31 +9,37 @@ block, redaction and warning goes to the audit log, recorded as the signed-in ow
 One contextId per chat: the panel sends it; if it is missing, one is created and returned.
 """
 
-from typing import Annotated, Any, Literal, cast
+from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from fastapi.concurrency import run_in_threadpool
-from postgrest.exceptions import APIError
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.deps import get_role
 from app.api.routes.agents.deps import AgentDatabase, get_agent_database
+from app.api.routes.agents.target import load_upstream_target
 from app.audit.recorder import AuditRecorder, InMemoryAuditRecorder, OwnerAuditRecorder
 from app.bindings.repository import BindingRepository, get_binding_repository
 from app.bindings.resolve import resolve_for_request
 from app.core.config import settings
-from app.gateway import a2a
+from app.gateway import a2a, limits
 from app.gateway.pipeline import GuardrailEngine
-from app.gateway.resolver import UpstreamTarget
 from app.gateway.service import (
     Audit,
+    GuardedReply,
     get_gateway_http_client,
     get_guardrail_engine,
     send_guarded,
 )
 from app.guardrails.repository import GuardrailRepository, get_guardrail_repository
+from app.mcp.agent_access import (
+    InMemoryMcpGrantLoader,
+    McpGrantLoader,
+    OwnerMcpGrantLoader,
+    load_grants,
+)
 
 router = APIRouter(prefix="/agents", tags=["test chat"])
 
@@ -45,6 +51,15 @@ def get_test_chat_recorder(
     if settings.SUPABASE_URL and settings.SUPABASE_KEY:
         return OwnerAuditRecorder(database.client)
     return InMemoryAuditRecorder()
+
+
+def get_test_chat_mcp_loader(
+    database: Annotated[AgentDatabase, Depends(get_agent_database)],
+) -> McpGrantLoader:
+    """FR-17: the agent's MCP access, read as the signed-in owner; in memory without Supabase."""
+    if settings.SUPABASE_URL and settings.SUPABASE_KEY:
+        return OwnerMcpGrantLoader(database.client)
+    return InMemoryMcpGrantLoader()
 
 
 # --- the A2A 1.0 subset the panel sends and reads (docs/agent-contract-a2a.md) -------------
@@ -95,6 +110,8 @@ class TraceEntry(BaseModel):
 class Usage(BaseModel):
     inputTokens: int
     outputTokens: int
+    costUsd: float = Field(description="The tokens priced from the hub's price table (B-05)")
+    model: str = Field(description="The price-table entry used")
     estimated: bool = Field(description="True when the agent sent no usage and it was estimated")
 
 
@@ -119,7 +136,9 @@ class GuardrailHubMetadata(BaseModel):
     stage: Literal["input", "output"] | None = None
     trace: list[TraceEntry]
     usage: Usage
-    limits: list[LimitUsed] = Field(description="Session limits used (FR-25/26); none yet")
+    limits: list[LimitUsed] = Field(
+        description="Per-call and per-session limits this call used (B-05, FR-25/26)"
+    )
     scores: list[EvaluatorScore] = Field(description="Evaluator scores (FR-28); none yet")
 
 
@@ -176,49 +195,15 @@ class ChatResponse(BaseModel):
 # --- the route --------------------------------------------------------------------------------
 
 
-def _estimate_tokens(text: str) -> int:
-    return (len(text) + 3) // 4  # about 4 characters per token (contract §4)
-
-
-def _usage(request_message: a2a.Json, result: a2a.Json | None) -> Usage:
-    """The agent's own usage when it sends one (contract §4), otherwise an estimate."""
-    holders = a2a.reply_holders(result) if result else []
-    for holder in [*holders, result.get("task") if result else None]:
-        usage = holder.get("metadata", {}).get("usage") if isinstance(holder, dict) else None
-        if isinstance(usage, dict) and {"inputTokens", "outputTokens"} <= usage.keys():
-            return Usage(
-                inputTokens=int(usage["inputTokens"]),
-                outputTokens=int(usage["outputTokens"]),
-                estimated=False,
-            )
-    sent, _ = a2a.checked_text([request_message])
-    answered, _ = a2a.checked_text(holders)
-    return Usage(
-        inputTokens=_estimate_tokens(sent), outputTokens=_estimate_tokens(answered), estimated=True
-    )
-
-
-def _load_target(database: AgentDatabase, agent_id: UUID) -> UpstreamTarget:
-    try:
-        response = (
-            database.client.table("agents")
-            .select("upstream_url,auth_header_name,auth_header_value")
-            .eq("id", str(agent_id))
-            .limit(1)
-            .execute()
-        )
-    except (APIError, httpx.HTTPError) as error:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE, "Could not load the agent"
-        ) from error
-    if not response.data:  # RLS: someone else's agent looks the same as a missing one
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Agent not found")
-    row = cast(dict[str, Any], response.data[0])
-    return UpstreamTarget(
-        upstream_url=str(row["upstream_url"]),
-        auth_header_name=row.get("auth_header_name"),
-        auth_header_value=row.get("auth_header_value"),
-    )
+def _usage(request_message: a2a.Json, reply: GuardedReply) -> Usage:
+    """The call's token and cost figures (B-05). When the agent never answered (blocked on the
+    way in, cut at the time limit, an error) only the message is counted."""
+    usage = reply.usage
+    if usage is None:
+        sent, _ = a2a.checked_text([request_message])
+        tokens = limits.estimate_tokens(sent)
+        usage = limits.CallUsage(tokens, 0, limits.price("default", tokens, 0), "default", True)
+    return Usage.model_validate(usage.as_hub())
 
 
 @router.post("/{agent_id}/test-chat", response_model=ChatResponse, response_model_exclude_none=True)
@@ -232,8 +217,9 @@ async def send_test_chat_message(
     engine: Annotated[GuardrailEngine, Depends(get_guardrail_engine)],
     client: Annotated[httpx.AsyncClient, Depends(get_gateway_http_client)],
     recorder: Annotated[AuditRecorder, Depends(get_test_chat_recorder)],
+    mcp: Annotated[McpGrantLoader, Depends(get_test_chat_mcp_loader)],
 ) -> ChatResponse:
-    target = await run_in_threadpool(_load_target, database, agent_id)
+    target = await run_in_threadpool(load_upstream_target, database, agent_id)
 
     call: a2a.Json = body.model_dump(mode="json", exclude_none=True)
     message: a2a.Json = call["params"]["message"]
@@ -245,6 +231,7 @@ async def send_test_chat_message(
         resolve_for_request, guardrails, bindings, str(agent_id), role, database.owner_id
     )
 
+    grants = await run_in_threadpool(load_grants, mcp, str(agent_id), None)
     reply = await send_guarded(
         call,
         target=target,
@@ -253,6 +240,7 @@ async def send_test_chat_message(
         client=client,
         audit=Audit(recorder=recorder, agent_id=str(agent_id)),
         role=role,
+        mcp_servers=[grant.for_agent() for grant in grants],
     )
 
     answer = reply.body
@@ -262,8 +250,8 @@ async def send_test_chat_message(
         holder: a2a.Json = found if isinstance(found, dict) else result["task"]
         hub: a2a.Json = (holder.get("metadata") or {}).get(a2a.METADATA_KEY) or {}
         hub.setdefault("trace", [])
-        hub["usage"] = _usage(message, result).model_dump()
-        hub["limits"] = []  # FR-25/26 session limits are not tracked yet
+        hub["usage"] = _usage(message, reply).model_dump()
+        hub["limits"] = reply.limits
         hub["scores"] = []  # FR-28 evaluators are not wired in yet
         a2a.add_hub_metadata(result, hub)
     return ChatResponse.model_validate(answer)

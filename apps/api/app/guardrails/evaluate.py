@@ -1,7 +1,8 @@
 """Dry-run a guardrail on sample text (FR-20).
 
-Regex, PII and prompt injection on the regex engine run for real. LLM judge and moderation have
-no model behind them yet, so their verdicts are keyword heuristics marked simulated.
+Regex, PII and prompt injection on the regex engine run for real. The llm_judge engine asks Claude
+when a judge is configured (app.guardrails.judge); without one, and on moderation, verdicts are
+keyword heuristics marked simulated.
 """
 
 import re
@@ -10,6 +11,7 @@ from dataclasses import dataclass
 
 import regex
 
+from app.guardrails.judge import Judge, criteria_for
 from app.guardrails.models import (
     PII_ENTITIES,
     DryRunResult,
@@ -174,7 +176,18 @@ def evaluate(
     text: str,
     signatures: Sequence[InjectionSignature],
     context: GuardrailContext | None = None,
+    judge: Judge | None = None,
 ) -> DryRunResult:
+    """Raises JudgeUnavailableError when the judge can't give a verdict."""
+    criteria = criteria_for(rule.config) if rule.engine == "llm_judge" else None
+    if judge is not None and criteria is not None:
+        verdict = judge(criteria, text)
+        if not verdict.flagged:
+            return DryRunResult(
+                result="pass", reason="Judge found nothing to flag", simulated=False
+            )
+        return DryRunResult(result=rule.action, reason=f"Judge: {verdict.reason}", simulated=False)
+
     simulated = rule.engine in ("llm_judge", "moderation")
     lowered = text.lower()
     reason: str | None = None
