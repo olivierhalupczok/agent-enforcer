@@ -8,6 +8,7 @@
    warning is recorded as an audit event. Audit failures are logged and never change the reply.
 """
 
+import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -20,10 +21,11 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import HttpUrl, ValidationError
 
 from app.api.routes.agents.deps import ensure_public_upstream
-from app.audit.models import AuditEventIn
+from app.audit.models import AuditEventIn, SessionCounters
 from app.audit.recorder import AuditRecorder
 from app.bindings.models import EffectivePolicy
-from app.gateway import a2a
+from app.core.config import settings
+from app.gateway import a2a, limits
 from app.gateway.pipeline import (
     GuardrailEngine,
     LocalEngine,
@@ -34,7 +36,8 @@ from app.gateway.pipeline import (
 )
 from app.gateway.resolver import UpstreamTarget
 
-UPSTREAM_TIMEOUT_SECONDS = 30.0
+# The httpx client's own ceiling; the per-call time limit (B-05) is settings.CALL_TIMEOUT_SECONDS.
+UPSTREAM_TIMEOUT_SECONDS = 120.0
 _DETAILS_MAX = 500  # audit_events.details limit
 
 logger = logging.getLogger(__name__)
@@ -76,6 +79,8 @@ class GuardedReply:
     status_code: int = 200  # with `raw`: the agent's own HTTP status and content type
     media_type: str = "application/json"
     trace: list[TraceEntry] = field(default_factory=list)
+    usage: limits.CallUsage | None = None  # B-05: None when the agent never answered
+    limits: list[a2a.Json] = field(default_factory=list)  # B-05 meters: { name, used, max, unit }
 
 
 async def post_upstream(
@@ -96,8 +101,9 @@ async def post_upstream(
     request.headers["Host"] = upstream.host_header
     try:
         # send() without stream=True reads the entire body: streamed replies are buffered.
-        return await client.send(request)
-    except httpx.TimeoutException as error:
+        # B-05 (FR-26): the whole call, body included, is cut at the per-call time limit.
+        return await asyncio.wait_for(client.send(request), settings.CALL_TIMEOUT_SECONDS)
+    except (TimeoutError, httpx.TimeoutException) as error:
         raise UpstreamError("Upstream agent did not answer in time", "timeout") from error
     except httpx.HTTPError as error:
         raise UpstreamError("Upstream agent could not be reached", "unreachable") from error
@@ -144,31 +150,62 @@ async def _record_events(
         logger.warning("Could not record audit events for agent %s", audit.agent_id, exc_info=True)
 
 
-async def _count_turn(audit: Audit, message: a2a.Json, reply: a2a.Json) -> None:
-    """A-07: count the turn the agent answered (no content). Failures never change the reply."""
+async def _record_limit_events(
+    audit: Audit, context_id: Any, events: list[AuditEventIn], *, stop_session: bool
+) -> None:
+    """B-05 limit hits. Only session caps pass their context: an A-07 limit block with a
+    context stops the session."""
+    if not events:
+        return
+    session = context_id if stop_session and isinstance(context_id, str) and context_id else None
+    try:
+        await run_in_threadpool(
+            audit.recorder.record_events, audit.agent_id, audit.key, session, events
+        )
+    except Exception:  # noqa: BLE001 - audit storage must not break the call
+        logger.warning("Could not record limit events for agent %s", audit.agent_id, exc_info=True)
+
+
+async def _count_turn(
+    audit: Audit, message: a2a.Json, usage: limits.CallUsage
+) -> SessionCounters | None:
+    """A-07: count the turn the agent answered (no content), with its tokens and cost (B-05).
+    Returns the session's counters after this turn, or None. Failures never change the reply."""
     context_id = message.get("contextId")
     if not isinstance(context_id, str) or not context_id:
-        return
+        return None
     try:
-        input_tokens, output_tokens = a2a.usage_tokens(reply)
-        await run_in_threadpool(
+        counters: SessionCounters | None = await run_in_threadpool(
             audit.recorder.record_turn,
             audit.agent_id,
             audit.key,
             context_id,
-            input_tokens,
-            output_tokens,
-            0.0,
+            usage.input_tokens,
+            usage.output_tokens,
+            usage.cost_usd,
         )
     except Exception:  # noqa: BLE001 - audit storage must not break a successful call
         logger.warning("Could not record a turn for agent %s", audit.agent_id, exc_info=True)
+        return None
+    return counters
 
 
-def _hub(policy: EffectivePolicy, role: str | None, trace: list[TraceEntry]) -> a2a.Json:
-    """metadata.guardrailHub: the trace, the policy version and the caller's role."""
+def _hub(
+    policy: EffectivePolicy,
+    role: str | None,
+    trace: list[TraceEntry],
+    usage: limits.CallUsage | None = None,
+    meters: list[a2a.Json] | None = None,
+) -> a2a.Json:
+    """metadata.guardrailHub: the trace, the policy version, the caller's role, and (B-05) the
+    call's token and cost figures and the limits it used."""
     hub: a2a.Json = {"trace": dump_trace(trace), "policyVersion": policy.version}
     if role is not None:
         hub["role"] = role
+    if usage is not None:
+        hub["usage"] = usage.as_hub()
+    if meters is not None:
+        hub["limits"] = meters
     return hub
 
 
@@ -179,9 +216,11 @@ def _blocked(
     outcome: StageOutcome,
     policy: EffectivePolicy,
     role: str | None,
+    usage: limits.CallUsage | None = None,
+    meters: list[a2a.Json] | None = None,
 ) -> a2a.Json:
     """The refusal task for a blocked call; the agent's reply, if any, is never shown."""
-    hub = {"blocked": True, "stage": stage, **_hub(policy, role, outcome.trace)}
+    hub = {"blocked": True, "stage": stage, **_hub(policy, role, outcome.trace, usage, meters)}
     task = a2a.rejected_task(message.get("contextId"), outcome.blocked_reason or "Blocked", hub)
     return {"jsonrpc": a2a.JSONRPC_VERSION, "id": rpc_id, "result": task}
 
@@ -224,6 +263,14 @@ async def send_guarded(
         response = await post_upstream(client, target.upstream_url, headers, body)
     except UpstreamError as error:
         await _record_events(audit, context_id, inbound.trace, policy)
+        if error.reason == "timeout":  # B-05 (FR-26): the cut is logged and audited
+            logger.warning(
+                "Cut the call to agent %s at the %gs time limit",
+                audit.agent_id,
+                settings.CALL_TIMEOUT_SECONDS,
+            )
+            cut = [limits.timeout_event(context_id, policy.version)]
+            await _record_limit_events(audit, context_id, cut, stop_session=False)
         error_body = a2a.rpc_error(rpc_id, a2a.INTERNAL_ERROR, str(error), error.reason)
         return GuardedReply(error_body, trace=inbound.trace)
     try:
@@ -242,9 +289,38 @@ async def send_guarded(
         error_body = a2a.rpc_error(rpc_id, a2a.INTERNAL_ERROR, text, "invalid_response")
         return GuardedReply(error_body, trace=inbound.trace)
 
+    usage: limits.CallUsage | None = None
+    checks: list[limits.LimitCheck] = []
     if "error" not in reply:
-        await _count_turn(audit, message, reply)
-    if not guarded or "error" in reply:
+        # B-05: tokens and cost of this call, counted into its session, then the caps.
+        usage = limits.call_usage(message, reply)
+        counters = await _count_turn(audit, message, usage)
+        checks = limits.check(usage, counters)
+    meters = [c.as_meter() for c in checks]
+    over = [c for c in checks if c.exceeded]
+    await _record_limit_events(
+        audit,
+        context_id,
+        [limits.audit_event(c, policy.version, context_id) for c in over if not c.per_session],
+        stop_session=False,
+    )
+    await _record_limit_events(
+        audit,
+        context_id,
+        [limits.audit_event(c, policy.version, context_id) for c in over if c.per_session],
+        stop_session=True,
+    )
+    blocking = next((c for c in over if c.action == "block"), None)
+    if blocking is not None:
+        # The agent answered, but over a blocking cap its reply is withheld.
+        await _record_events(audit, context_id, inbound.trace, policy)
+        refused = StageOutcome(
+            trace=inbound.trace, blocked_reason=f'Blocked by limit "{blocking.reason()}"'
+        )
+        refusal = _blocked(rpc_id, message, "output", refused, policy, role, usage, meters)
+        return GuardedReply(refusal, trace=inbound.trace, usage=usage, limits=meters)
+
+    if (not guarded and not over) or "error" in reply:
         # No guardrails, or the agent's own JSON-RPC error: passed through byte for byte.
         await _record_events(audit, context_id, inbound.trace, policy)
         return GuardedReply(
@@ -253,6 +329,8 @@ async def send_guarded(
             status_code=response.status_code,
             media_type=response.headers.get("content-type", "application/json"),
             trace=inbound.trace,
+            usage=usage,
+            limits=meters,
         )
 
     # --- output guardrails ---
@@ -262,7 +340,7 @@ async def send_guarded(
     await _record_events(audit, context_id, trace, policy)
     if outbound.blocked_reason is not None:
         blocked = StageOutcome(trace=trace, blocked_reason=outbound.blocked_reason)
-        refusal = _blocked(rpc_id, message, "output", blocked, policy, role)
-        return GuardedReply(refusal, trace=trace)
-    a2a.add_hub_metadata(result, _hub(policy, role, trace))
-    return GuardedReply(reply, trace=trace)
+        refusal = _blocked(rpc_id, message, "output", blocked, policy, role, usage, meters)
+        return GuardedReply(refusal, trace=trace, usage=usage, limits=meters)
+    a2a.add_hub_metadata(result, _hub(policy, role, trace, usage, meters))
+    return GuardedReply(reply, trace=trace, usage=usage, limits=meters)

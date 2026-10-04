@@ -23,6 +23,7 @@ from app.audit.models import (
     AuditEventPage,
     AuditRule,
     EventFilters,
+    Session,
     SessionCounters,
     SessionFilters,
     SessionPage,
@@ -52,6 +53,14 @@ class AuditRepository(Protocol):
     def rules(self) -> list[AuditRule]: ...
 
     def sessions(self, filters: SessionFilters) -> SessionPage: ...
+
+
+def _with_limits(counters: SessionCounters, agent_name: str | None, events: int) -> Session:
+    """A session with its B-05 limit meters (the session caps and how much of them it used)."""
+    from app.gateway.limits import session_limits  # app.gateway imports app.audit
+
+    session = to_session(counters, agent_name, events)
+    return session.model_copy(update={"limits": session_limits(counters)})
 
 
 def event_cursor(event: AuditEvent) -> str:
@@ -103,7 +112,7 @@ class InMemoryAuditRepository:
         page = rows[filters.offset : filters.offset + filters.limit]
         end = filters.offset + len(page)
         return SessionPage(
-            data=[to_session(s, None, counts[(s.agent_id, s.context_id)]) for s in page],
+            data=[_with_limits(s, None, counts[(s.agent_id, s.context_id)]) for s in page],
             next_cursor=cursor.encode([str(end)]) if end < len(rows) else None,
         )
 
@@ -214,7 +223,7 @@ class SupabaseAuditRepository:
             )
             counts = Counter((e["agent_id"], e["context_id"]) for e in found.data)
         sessions = [
-            to_session(
+            _with_limits(
                 SessionCounters.model_validate(row),
                 _agent_name(row),
                 counts[(row["agent_id"], row["context_id"])],

@@ -24,11 +24,12 @@ from app.audit.recorder import AuditRecorder, InMemoryAuditRecorder, OwnerAuditR
 from app.bindings.repository import BindingRepository, get_binding_repository
 from app.bindings.resolve import resolve_for_request
 from app.core.config import settings
-from app.gateway import a2a
+from app.gateway import a2a, limits
 from app.gateway.pipeline import GuardrailEngine
 from app.gateway.resolver import UpstreamTarget
 from app.gateway.service import (
     Audit,
+    GuardedReply,
     get_gateway_http_client,
     get_guardrail_engine,
     send_guarded,
@@ -95,6 +96,8 @@ class TraceEntry(BaseModel):
 class Usage(BaseModel):
     inputTokens: int
     outputTokens: int
+    costUsd: float = Field(description="The tokens priced from the hub's price table (B-05)")
+    model: str = Field(description="The price-table entry used")
     estimated: bool = Field(description="True when the agent sent no usage and it was estimated")
 
 
@@ -119,7 +122,9 @@ class GuardrailHubMetadata(BaseModel):
     stage: Literal["input", "output"] | None = None
     trace: list[TraceEntry]
     usage: Usage
-    limits: list[LimitUsed] = Field(description="Session limits used (FR-25/26); none yet")
+    limits: list[LimitUsed] = Field(
+        description="Per-call and per-session limits this call used (B-05, FR-25/26)"
+    )
     scores: list[EvaluatorScore] = Field(description="Evaluator scores (FR-28); none yet")
 
 
@@ -176,26 +181,15 @@ class ChatResponse(BaseModel):
 # --- the route --------------------------------------------------------------------------------
 
 
-def _estimate_tokens(text: str) -> int:
-    return (len(text) + 3) // 4  # about 4 characters per token (contract §4)
-
-
-def _usage(request_message: a2a.Json, result: a2a.Json | None) -> Usage:
-    """The agent's own usage when it sends one (contract §4), otherwise an estimate."""
-    holders = a2a.reply_holders(result) if result else []
-    for holder in [*holders, result.get("task") if result else None]:
-        usage = holder.get("metadata", {}).get("usage") if isinstance(holder, dict) else None
-        if isinstance(usage, dict) and {"inputTokens", "outputTokens"} <= usage.keys():
-            return Usage(
-                inputTokens=int(usage["inputTokens"]),
-                outputTokens=int(usage["outputTokens"]),
-                estimated=False,
-            )
-    sent, _ = a2a.checked_text([request_message])
-    answered, _ = a2a.checked_text(holders)
-    return Usage(
-        inputTokens=_estimate_tokens(sent), outputTokens=_estimate_tokens(answered), estimated=True
-    )
+def _usage(request_message: a2a.Json, reply: GuardedReply) -> Usage:
+    """The call's token and cost figures (B-05). When the agent never answered (blocked on the
+    way in, cut at the time limit, an error) only the message is counted."""
+    usage = reply.usage
+    if usage is None:
+        sent, _ = a2a.checked_text([request_message])
+        tokens = limits.estimate_tokens(sent)
+        usage = limits.CallUsage(tokens, 0, limits.price("default", tokens, 0), "default", True)
+    return Usage.model_validate(usage.as_hub())
 
 
 def _load_target(database: AgentDatabase, agent_id: UUID) -> UpstreamTarget:
@@ -262,8 +256,8 @@ async def send_test_chat_message(
         holder: a2a.Json = found if isinstance(found, dict) else result["task"]
         hub: a2a.Json = (holder.get("metadata") or {}).get(a2a.METADATA_KEY) or {}
         hub.setdefault("trace", [])
-        hub["usage"] = _usage(message, result).model_dump()
-        hub["limits"] = []  # FR-25/26 session limits are not tracked yet
+        hub["usage"] = _usage(message, reply).model_dump()
+        hub["limits"] = reply.limits
         hub["scores"] = []  # FR-28 evaluators are not wired in yet
         a2a.add_hub_metadata(result, hub)
     return ChatResponse.model_validate(answer)

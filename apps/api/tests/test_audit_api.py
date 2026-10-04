@@ -102,7 +102,11 @@ def test_sessions_with_counters_status_and_event_count(events: None) -> None:
     assert by_ctx["ctx-a"]["events"] == 2 and by_ctx["ctx-a"]["status"] == "active"
     assert by_ctx["ctx|odd,(id)"]["status"] == "stopped"
     assert by_ctx["ctx|odd,(id)"]["stop_reason"] == "maxSessionTokens block"
-    assert by_ctx["ctx-a"]["limits"] == []
+    # B-05 fills the session's limit meters from the session caps
+    assert by_ctx["ctx-a"]["limits"] == [
+        {"name": "Session tokens", "used": 17.0, "max": 50000.0, "unit": "tokens"},
+        {"name": "Session cost", "used": 0.0, "max": 0.5, "unit": "USD"},
+    ]
     assert sessions[0]["context_id"] == "ctx-b"  # most recent activity first
 
 

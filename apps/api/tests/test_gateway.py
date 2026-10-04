@@ -456,11 +456,13 @@ def test_a_forwarded_call_counts_a_turn_with_the_reply_usage() -> None:
         {"inputTokens": True},
     ],
 )
-def test_missing_or_bad_usage_counts_zero_tokens(usage: object) -> None:
+def test_missing_or_bad_usage_is_estimated_from_the_text(usage: object) -> None:
+    # B-05 / contract §4: without a usable metadata.usage the hub estimates from the text
+    # (about 4 characters per token): "Where is my order #48213?" -> 7, "ok" -> 1.
     scripted_upstream(reply_with_usage(usage))
     assert post(with_context("ctx-1")).status_code == 200
     session = MEMORY.sessions[(AGENT_ID, "ctx-1")]
-    assert (session.turns, session.input_tokens, session.output_tokens) == (1, 0, 0)
+    assert (session.turns, session.input_tokens, session.output_tokens) == (1, 7, 1)
 
 
 def test_no_context_id_or_an_agent_error_records_nothing() -> None:
