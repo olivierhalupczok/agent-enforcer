@@ -46,12 +46,34 @@ echo "    node_modules: $(du -sh node_modules 2>/dev/null | cut -f1 || echo '?')
 
 # copy the trimmed package next to the function file: the Python runtime always
 # ships files that sit inside the function's directory, no includeFiles needed
-echo "==> [2b] vendor pi package into api/_pi/"
+echo "==> [2b] vendor pi package + node binary into api/_pi/"
 rm -rf api/_pi
-mkdir -p api/_pi
-cp -R "$PKG" api/_pi/pi-coding-agent
+mkdir -p api/_pi/pi-coding-agent
+# dist/bundle is self-contained except @earendil-works/chord + typebox
+# (verified: the bundle imports nothing else from nested node_modules)
+cp -R "$PKG/dist" api/_pi/pi-coding-agent/dist
+mkdir -p api/_pi/pi-coding-agent/node_modules/@earendil-works
+cp -R "$PKG/node_modules/@earendil-works/chord" api/_pi/pi-coding-agent/node_modules/@earendil-works/chord
+cp -R "$PKG/node_modules/typebox" api/_pi/pi-coding-agent/node_modules/typebox
+# package.json needed for module resolution (type field / exports)
+cp "$PKG/package.json" api/_pi/pi-coding-agent/package.json
 echo "    api/_pi: $(du -sh api/_pi 2>/dev/null | cut -f1 || echo '?')"
-node api/_pi/pi-coding-agent/dist/bundle/cli.js --version && echo "    vendored cli runs OK"
+
+# the runtime lambda has no node on PATH (python runtime) — ship the build
+# image's node binary; the launcher prefers it via PI_COMMAND (state.py)
+NODE_BIN="$(command -v node || true)"
+if [ -n "$NODE_BIN" ]; then
+  cp "$NODE_BIN" api/_pi/node
+  chmod +x api/_pi/node
+  echo "    shipped node: $(api/_pi/node --version)"
+else
+  echo "    WARNING: no node on build image PATH; runtime pi spawn will fail"
+fi
+# verify the vendored stack end to end
+if [ -x api/_pi/node ]; then
+  ANTHROPIC_API_KEY=dummy api/_pi/node api/_pi/pi-coding-agent/dist/bundle/cli.js --provider anthropic --model claude-sonnet-4-5 --version >/dev/null 2>&1 \
+    && echo "    vendored pi runs OK" || echo "    WARNING: vendored pi did not run"
+fi
 
 echo "==> [3/3] vendor pi-control-layer files"
 # locate the package either as repo sibling (repo layout) or already vendored

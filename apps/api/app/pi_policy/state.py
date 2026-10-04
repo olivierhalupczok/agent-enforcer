@@ -64,6 +64,14 @@ def ensure_state() -> Path:
     return _STATE_DIR
 
 
+def _shipped_node() -> str | None:
+    """node binary vendored by build.sh next to the function (api/_pi/node)."""
+    shipped = _API_ROOT / "api" / "_pi" / "node"
+    if shipped.is_file() and os.access(shipped, os.X_OK):
+        return str(shipped)
+    return None
+
+
 def schema_path() -> str:
     """Schema location: repo packages dir, or the vendored copy (Vercel build)."""
     repo = Path(settings.POLICY_SCHEMA_PATH)
@@ -82,7 +90,9 @@ def pi_command() -> list[str] | None:
     for pkg_dir in _PI_NPM_CANDIDATES:
         bundled = pkg_dir / "dist" / "bundle" / "cli.js"
         if bundled.is_file():
-            node = shutil.which("node")
+            # node from PATH, or the binary shipped next to the function
+            # (api/_pi/node — the Python runtime lambda has no node on PATH)
+            node = shutil.which("node") or _shipped_node()
             if node is None:
                 return None
             return [node, str(bundled)]
