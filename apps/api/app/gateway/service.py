@@ -35,6 +35,7 @@ from app.gateway.pipeline import (
     run_stage,
 )
 from app.gateway.resolver import UpstreamTarget
+from app.guardrails.judge import get_judge
 
 # The httpx client's own ceiling; the per-call time limit (B-05) is settings.CALL_TIMEOUT_SECONDS.
 UPSTREAM_TIMEOUT_SECONDS = 120.0
@@ -51,7 +52,7 @@ async def get_gateway_http_client() -> AsyncIterator[httpx.AsyncClient]:
 
 
 def get_guardrail_engine() -> GuardrailEngine:
-    return LocalEngine()
+    return LocalEngine(get_judge())
 
 
 class UpstreamError(Exception):
@@ -248,7 +249,8 @@ async def send_guarded(
 
     # --- input guardrails ---
     guarded = bool(policy.input or policy.output)
-    inbound = run_stage(policy.input, "input", [message], engine)
+    # In a worker thread: the LLM judge makes a blocking model call.
+    inbound = await run_in_threadpool(run_stage, policy.input, "input", [message], engine)
     if inbound.blocked_reason is not None:
         await _record_events(audit, context_id, inbound.trace, policy)
         refusal = _blocked(rpc_id, message, "input", inbound, policy, role)
@@ -335,7 +337,9 @@ async def send_guarded(
 
     # --- output guardrails ---
     result = reply["result"]
-    outbound = run_stage(policy.output, "output", a2a.reply_holders(result), engine)
+    outbound = await run_in_threadpool(
+        run_stage, policy.output, "output", a2a.reply_holders(result), engine
+    )
     trace = inbound.trace + outbound.trace
     await _record_events(audit, context_id, trace, policy)
     if outbound.blocked_reason is not None:
