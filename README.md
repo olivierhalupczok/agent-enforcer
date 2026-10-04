@@ -1,5 +1,7 @@
 # Guardrail Hub
 
+## MAIN VIDEO ON YOUTUBE: https://youtu.be/Unkrv2juAcw
+
 AI Control Layer: govern AI agents with one central policy, watch every rule fire live, and edit the policy without restarting anything.
 
 | Path               | What it is                            | Tooling                 |
