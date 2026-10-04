@@ -44,6 +44,15 @@ PKG="node_modules/@earendil-works/pi-coding-agent"
 rm -rf "$PKG/node_modules/@esbuild" "$PKG/node_modules/typescript" "$PKG/node_modules/@types" 2>/dev/null || true
 echo "    node_modules: $(du -sh node_modules 2>/dev/null | cut -f1 || echo '?')"
 
+# copy the trimmed package next to the function file: the Python runtime always
+# ships files that sit inside the function's directory, no includeFiles needed
+echo "==> [2b] vendor pi package into api/_pi/"
+rm -rf api/_pi
+mkdir -p api/_pi
+cp -R "$PKG" api/_pi/pi-coding-agent
+echo "    api/_pi: $(du -sh api/_pi 2>/dev/null | cut -f1 || echo '?')"
+node api/_pi/pi-coding-agent/dist/bundle/cli.js --version && echo "    vendored cli runs OK"
+
 echo "==> [3/3] vendor pi-control-layer files"
 # locate the package either as repo sibling (repo layout) or already vendored
 SRC=""

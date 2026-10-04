@@ -11,4 +11,5 @@ __pycache__/
 .vercel
 node_modules/
 pi-control-layer/
+api/_pi/
 # requirements.txt  # committed as a build fallback for Vercel (no uv on image)

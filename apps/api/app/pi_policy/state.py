@@ -23,10 +23,16 @@ _STATE_DIR = Path(settings.POLICY_PATH).parent
 _VERCEL = Path("/tmp/.vercel").exists() or bool(os.environ.get("VERCEL"))
 
 # npm package layout: node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js.
-# Local: apps/api/node_modules. Vercel bundle: node_modules is at the bundle root
-# (/var/task/node_modules), so check both.
+# Candidates, first match wins:
+# - api/_pi/ — vendored next to the function by build.sh; the Python runtime
+#   always ships files inside the function dir (immune to includeFiles quirks)
+# - <bundle-root>/node_modules — includeFiles-globbed (Node-runtime behavior)
+# - apps/api/node_modules — repo layout (local dev)
+_API_ROOT = Path(__file__).resolve().parents[2]
 _PI_NPM_CANDIDATES = (
+    _API_ROOT / "api" / "_pi" / "pi-coding-agent",
     Path(settings.REPO_ROOT) / "node_modules" / "@earendil-works" / "pi-coding-agent",
+    _API_ROOT / "node_modules" / "@earendil-works" / "pi-coding-agent",
     Path(settings.REPO_ROOT)
     / "apps"
     / "api"

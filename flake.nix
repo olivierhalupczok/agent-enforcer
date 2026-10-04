@@ -20,6 +20,7 @@
             pkgs.uv
             pkgs.pnpm
             pkgs.nodejs_24
+            pkgs.vercel-pkg
           ];
 
           commonEnv = lib.optionalAttrs pkgs.stdenv.isLinux {
