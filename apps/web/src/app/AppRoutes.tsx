@@ -11,6 +11,8 @@ import { PlaygroundPage } from '../pages/playground/PlaygroundPage'
 import { SecurityPage } from '../pages/security/SecurityPage'
 import { IncidentsPage } from '../pages/incidents/IncidentsPage'
 import { SessionsPage } from '../pages/sessions/SessionsPage'
+import { PiSessionsPage } from '../pages/piSessions/PiSessionsPage'
+import { Placeholder } from '../pages/Placeholder'
 import { SignInPage } from '../pages/SignInPage'
 import { TestChatPage } from '../pages/test/TestChatPage'
 import { Layout } from './Layout'
@@ -30,6 +32,7 @@ const PAGES: Record<string, ReactElement> = {
   '/policies': <PolicyPage />,
   '/playground': <PlaygroundPage />,
   '/incidents': <IncidentsPage />,
+  '/pi-sessions': <PiSessionsPage />,
 }
 
 export function AppRoutes() {

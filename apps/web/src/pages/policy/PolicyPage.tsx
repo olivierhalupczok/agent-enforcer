@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AgentPolicy, PiPolicy, SchemaError } from '../../api/piPolicy'
+import { apiPath } from '../../api/client'
 import { usePiPolicy, useSavePiPolicy, validatePiPolicy } from '../../api/piPolicy'
 import { buttonPrimary, buttonSecondary } from '../../ui/classes'
 import { PageHeader, PageShell } from '../../ui/Page'
@@ -96,6 +97,24 @@ export function PolicyPage() {
     void query.refetch()
   }
 
+  // Restore Defaults: fetch the seed policy, validate it as the draft, and put it
+  // in the editor — nothing is written until the judge hits Save changes.
+  const [restoreState, setRestoreState] = useState<'idle' | 'loading'>('idle')
+  const restoreDefaults = async () => {
+    setRestoreState('loading')
+    try {
+      const res = await fetch(apiPath('/pi/policy/defaults'))
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const body = (await res.json()) as { policy: PiPolicy }
+      setDraft(body.policy)
+      setSaveState({ kind: 'idle' })
+      setRestoreState('idle')
+    } catch (error) {
+      setSaveState({ kind: 'error', message: (error as { message?: string }).message ?? 'Restore failed.' })
+      setRestoreState('idle')
+    }
+  }
+
   return (
     <PageShell>
       <PageHeader
@@ -116,6 +135,14 @@ export function PolicyPage() {
         }
         actions={loaded && (
           <>
+            <button
+              type="button"
+              className={buttonSecondary}
+              disabled={restoreState === 'loading' || saveState.kind === 'saving'}
+              onClick={() => void restoreDefaults()}
+            >
+              {restoreState === 'loading' ? 'Restoring…' : 'Restore Defaults'}
+            </button>
             <button type="button" className={buttonSecondary} onClick={reload}>
               Reload
             </button>

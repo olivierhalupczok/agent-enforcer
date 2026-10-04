@@ -17,6 +17,7 @@ function authSummary(auth: McpServer['auth']): string {
 export function McpServersPage() {
   const servers = useMcpServers()
   const [registering, setRegistering] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [highlightId, setHighlightId] = useState<string | null>(null)
   const registerButtonRef = useRef<HTMLButtonElement>(null)
   const wasRegistering = useRef(false)
@@ -32,6 +33,8 @@ export function McpServersPage() {
     const timer = setTimeout(() => setHighlightId(null), 3000)
     return () => clearTimeout(timer)
   }, [highlightId])
+
+  const editing = servers.data?.find((s) => s.id === editingId)
 
   let content
   if (servers.isError) {
@@ -58,7 +61,16 @@ export function McpServersPage() {
       />
     )
   } else {
-    content = <McpServersTable servers={servers.data} highlightId={highlightId} />
+    content = (
+      <McpServersTable
+        servers={servers.data}
+        highlightId={highlightId}
+        onEdit={(id) => {
+          setRegistering(false)
+          setEditingId(id)
+        }}
+      />
+    )
   }
 
   return (
@@ -73,9 +85,14 @@ export function McpServersPage() {
         ) : undefined}
       />
       {registering && (
-        <RegisterMcpServerForm
-          onClose={() => setRegistering(false)}
-          onRegistered={(server) => setHighlightId(server.id)}
+        <McpServerForm onClose={() => setRegistering(false)} onSaved={(server) => setHighlightId(server.id)} />
+      )}
+      {editing && (
+        <McpServerForm
+          key={editing.id}
+          server={editing}
+          onClose={() => setEditingId(null)}
+          onSaved={(server) => setHighlightId(server.id)}
         />
       )}
       {content}
@@ -83,7 +100,13 @@ export function McpServersPage() {
   )
 }
 
-function McpServersTable({ servers, highlightId }: { servers: readonly McpServer[]; highlightId: string | null }) {
+interface TableProps {
+  servers: readonly McpServer[]
+  highlightId: string | null
+  onEdit: (id: string) => void
+}
+
+function McpServersTable({ servers, highlightId, onEdit }: TableProps) {
   const remove = useDeleteMcpServer()
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const restoreFocusId = useRef<string | null>(null)

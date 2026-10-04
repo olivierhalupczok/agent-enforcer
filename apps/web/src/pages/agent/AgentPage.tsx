@@ -7,6 +7,7 @@ import { buttonPrimary, buttonSecondary } from '../../ui/classes'
 import { LoadingRows, PageHeader, PageShell } from '../../ui/Page'
 import { AgentDeploy } from './AgentDeploy'
 import { AgentGuardrails } from './AgentGuardrails'
+import { AgentMcpServers } from './AgentMcpServers'
 import { AgentOverview } from './AgentOverview'
 import { EditAgentForm } from './EditAgentForm'
 
