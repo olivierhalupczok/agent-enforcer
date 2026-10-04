@@ -100,10 +100,6 @@ If you prefer [just](https://github.com/casey/just), a `justfile` with the same 
 
 ## How the pieces fit - Agent Integrated (pi harness integration)
 
-A prompt in the Agent Wrapped context never goes straight to an agent: the API resolves who is calling, runs the resolved guardrails on the way in, forwards the request, and runs the output guardrails on the reply. The control catalog lives in Supabase, not in the agents.
-
-The Agent Integrated side is separate: the extension in `packages/pi-control-layer` loads into the pi coding agent and enforces the policy on every tool call, directly on the host where pi runs. The live policy is `.pi/policy.json` in the repo root (gitignored, seeded from `policy.json.example`); the extension hot-reloads it, so a save on the Policies page takes effect without a restart.
-
 ```mermaid
 flowchart LR
     admin["Admin"]
