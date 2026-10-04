@@ -89,6 +89,45 @@ describe('MCP servers', () => {
     expect(screen.getByLabelText('Name')).toHaveAttribute('aria-invalid', 'true')
   })
 
+  it('edits a server and sends only what changed', async () => {
+    const user = await open()
+    await user.click(screen.getByRole('button', { name: 'Edit Orders' }))
+    const form = within(screen.getByRole('form', { name: 'Edit Orders' }))
+    expect(form.getByLabelText('Name')).toHaveValue('Orders')
+    expect(form.getByLabelText('Allowed tools')).toHaveValue('get_order, list_orders')
+    await user.clear(form.getByLabelText('Allowed tools'))
+    await user.type(form.getByLabelText('Allowed tools'), 'get_order')
+    await user.click(form.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(screen.queryByRole('form', { name: 'Edit Orders' })).not.toBeInTheDocument())
+    expect(fakeApi.lastMcpServerUpdate).toEqual({ allowed_tools: ['get_order'] })
+    expect(screen.getByRole('list', { name: 'Tools of Orders' })).toHaveTextContent('get_order')
+    expect(screen.getByRole('list', { name: 'Tools of Orders' })).not.toHaveTextContent('list_orders')
+  })
+
+  it('warns that removing a tool also removes it from agents', async () => {
+    fakeApi.mcpAccess = [{ agent_id: 'agent-support', server_id: 'mcp-orders', allowed_tools: ['list_orders'] }]
+    const user = await open()
+    await user.click(screen.getByRole('button', { name: 'Edit Orders' }))
+    const form = within(screen.getByRole('form', { name: 'Edit Orders' }))
+    await user.clear(form.getByLabelText('Allowed tools'))
+    await user.type(form.getByLabelText('Allowed tools'), 'get_order')
+    expect(form.getByText(/Removing list_orders also removes it from the agent using this server/)).toBeInTheDocument()
+  })
+
+  it('replaces the authentication only when asked', async () => {
+    const user = await open()
+    await user.click(screen.getByRole('button', { name: 'Edit Orders' }))
+    const form = within(screen.getByRole('form', { name: 'Edit Orders' }))
+    expect(form.queryByLabelText('API key')).not.toBeInTheDocument()
+    await user.click(form.getByRole('checkbox', { name: /Change authentication/ }))
+    await user.type(form.getByLabelText('API key'), 'sk-rotated')
+    await user.click(form.getByRole('button', { name: 'Save' }))
+    await waitFor(() =>
+      expect(fakeApi.lastMcpServerUpdate).toEqual({ auth: { type: 'api_key', header: 'X-Api-Key', api_key: 'sk-rotated' } }),
+    )
+  })
+
   it('deletes a server after confirmation', async () => {
     const user = await open()
     await user.click(screen.getByRole('button', { name: 'Delete Orders' }))
@@ -113,4 +152,3 @@ describe('MCP servers', () => {
     expect(fakeApi.mcpServers).toHaveLength(1)
   })
 })
-

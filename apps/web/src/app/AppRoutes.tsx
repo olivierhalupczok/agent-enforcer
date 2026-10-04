@@ -12,7 +12,6 @@ import { SecurityPage } from '../pages/security/SecurityPage'
 import { IncidentsPage } from '../pages/incidents/IncidentsPage'
 import { SessionsPage } from '../pages/sessions/SessionsPage'
 import { PiSessionsPage } from '../pages/piSessions/PiSessionsPage'
-import { Placeholder } from '../pages/Placeholder'
 import { SignInPage } from '../pages/SignInPage'
 import { TestChatPage } from '../pages/test/TestChatPage'
 import { Layout } from './Layout'
@@ -20,7 +19,7 @@ import { AGENT_HOME, homeFor, navItemsFor } from './nav'
 import { useMode } from './mode'
 import { useRole } from './role'
 
-// Screens that exist; every other nav item renders its placeholder.
+// Every navigation item maps to a shipped screen.
 const PAGES: Record<string, ReactElement> = {
   '/agents': <AgentsPage />,
   '/audit': <AuditLogPage />,

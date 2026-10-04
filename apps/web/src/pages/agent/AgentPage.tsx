@@ -160,6 +160,7 @@ export function AgentPage() {
           <AgentOverview agent={agent.data} />
         )}
         <AgentGuardrails agent={agent.data} />
+        <AgentMcpServers agent={agent.data} />
         <AgentDeploy agent={agent.data} />
       </div>
     </PageShell>

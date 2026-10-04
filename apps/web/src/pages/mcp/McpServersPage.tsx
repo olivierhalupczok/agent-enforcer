@@ -3,9 +3,9 @@ import { useDeleteMcpServer, useMcpServers } from '../../api/mcpServers'
 import type { McpServer } from '../../api/types'
 import { buttonPrimary, buttonSecondary } from '../../ui/classes'
 import { EmptyState, LoadingRows, PageHeader, PageShell, TableFrame } from '../../ui/Page'
-import { RegisterMcpServerForm } from './RegisterMcpServerForm'
+import { McpServerForm } from './McpServerForm'
 
-const HEADERS = ['Server', 'URL', 'Auth', 'Allowed tools', '']
+const HEADERS = ['Server', 'URL', 'Auth', 'Allowed tools', 'Agents', '']
 const cell = 'px-5 py-4 align-middle'
 
 function authSummary(auth: McpServer['auth']): string {
@@ -54,7 +54,15 @@ export function McpServersPage() {
         title="No MCP servers registered yet."
         description="Record a tool server and the exact tool names allowed on it."
         action={!registering ? (
-          <button ref={registerButtonRef} type="button" className={buttonPrimary} onClick={() => setRegistering(true)}>
+          <button
+            ref={registerButtonRef}
+            type="button"
+            className={buttonPrimary}
+            onClick={() => {
+              setEditingId(null)
+              setRegistering(true)
+            }}
+          >
             Register MCP server
           </button>
         ) : undefined}
@@ -166,7 +174,16 @@ function McpServersTable({ servers, highlightId, onEdit }: TableProps) {
                       ))}
                     </ul>
                   </td>
-                  <td className={`${cell} text-right`}>
+                  <td className={`${cell} text-muted`}>{server.agents}</td>
+                  <td className={`${cell} text-right whitespace-nowrap`}>
+                    <button
+                      type="button"
+                      aria-label={`Edit ${server.name}`}
+                      onClick={() => onEdit(server.id)}
+                      className={`${buttonSecondary} mr-2 px-3 text-xs`}
+                    >
+                      Edit
+                    </button>
                     {confirmingId === server.id ? (
                       <div role="group" aria-label={`Delete ${server.name}?`} className="flex justify-end gap-2 whitespace-nowrap">
                         <button
