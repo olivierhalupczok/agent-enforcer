@@ -113,11 +113,20 @@ def audit_events(trace: list[TraceEntry], policy_version: str) -> list[AuditEven
             stage=entry.stage,
             action=entry.verdict,
             config_version=policy_version,
-            details=entry.reason[:_DETAILS_MAX],  # the reason, never the message text
+            details=_details(entry),
         )
         for entry in trace
         if entry.verdict != "pass"
     ]
+
+
+def _details(entry: TraceEntry) -> str:
+    """The reason, never the message text. A simulated verdict always says so (it must never be
+    reported as a real one), whatever wording its engine used."""
+    reason = entry.reason
+    if entry.simulated and not reason.startswith("Simulated"):
+        reason = f"Simulated: {reason}"
+    return reason[:_DETAILS_MAX]
 
 
 async def _record_events(
