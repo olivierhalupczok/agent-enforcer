@@ -42,11 +42,19 @@ def debug_pi() -> dict[str, object]:
             "pkgSizeBytes": _du(pkg) if os.path.isdir(pkg) else 0,
         }
 
+    node_candidates = [
+        "/var/lang/bin/node",
+        "/opt/node/bin/node",
+        "/usr/bin/node",
+        "/usr/local/bin/node",
+        "/var/task/node",
+    ]
     return {
         "cwd": os.getcwd(),
         "vercel": bool(os.environ.get("VERCEL")),
         "varTaskListing": task_listing,
         "repoRoot": settings.REPO_ROOT,
+        "nodeCandidates": {p: os.path.exists(p) for p in node_candidates},
         "nodeOnPath": shutil.which("node"),
         "piOnPath": shutil.which("pi"),
         "resolvedPiCommand": pi_command(),
