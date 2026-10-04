@@ -17,10 +17,13 @@ POST /a/<agent id>
      trace goes in the reply's metadata.guardrailHub. With no guardrails at all, the call and
      the reply pass through byte for byte.
 
+After a successful forward the gateway counts the turn for the message's contextId (A-07).
+
 The agent's id stands in for the deployment slug until deployments exist (B-03).
 """
 
 import json
+import logging
 from collections.abc import AsyncIterator
 from typing import Annotated, Any
 from uuid import UUID
@@ -33,13 +36,15 @@ from fastapi.security import APIKeyHeader
 from pydantic import HttpUrl, ValidationError
 
 from app.api.routes.agents.deps import ensure_public_upstream
+from app.audit.recorder import AuditRecorder, get_audit_recorder
 from app.gateway import a2a
 from app.gateway.pipeline import GuardrailEngine, LocalEngine, StageOutcome, dump_trace, run_stage
-from app.gateway.policy import PolicyLoader, get_policy_loader
+from app.gateway.policy import PolicyLoader, get_policy_loader, read_role
 from app.gateway.resolver import AgentResolver, get_agent_resolver
 
 UPSTREAM_TIMEOUT_SECONDS = 30.0
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["gateway"])
 _api_key = APIKeyHeader(name=a2a.API_KEY_HEADER, auto_error=False)
 
@@ -134,6 +139,7 @@ async def forward_to_agent(
     policies: Annotated[PolicyLoader, Depends(get_policy_loader)],
     engine: Annotated[GuardrailEngine, Depends(get_guardrail_engine)],
     client: Annotated[httpx.AsyncClient, Depends(get_gateway_http_client)],
+    recorder: Annotated[AuditRecorder, Depends(get_audit_recorder)],
 ) -> Response:
     if not key or not _is_uuid(agent_id):
         raise _unauthorized()
@@ -156,15 +162,16 @@ async def forward_to_agent(
     if not isinstance(params, dict) or not isinstance(params.get("message"), dict):
         return _rpc_error(rpc_id, a2a.INVALID_PARAMS, "params.message is required")
     message = params["message"]
+    role, stripped = read_role(call)
 
     # --- B-02: input guardrails ---
-    policy = await run_in_threadpool(policies.load, agent_id, key)
+    policy = await run_in_threadpool(policies.load, agent_id, key, role)
     guarded = bool(policy.input or policy.output)
     inbound = run_stage(policy.input, "input", [message], engine)
     if inbound.blocked_reason is not None:
-        return _blocked(rpc_id, message, "input", inbound)
-    if guarded:
-        body = json.dumps(call).encode()  # the call with any redactions applied
+        return _blocked(rpc_id, message, "input", inbound, role)
+    if guarded or stripped:
+        body = json.dumps(call).encode()  # the call with any redactions, without demo fields
 
     # --- forward to the agent's JSON-RPC endpoint ---
     headers = {"Content-Type": "application/json", a2a.A2A_VERSION_HEADER: a2a.A2A_VERSION}
@@ -193,6 +200,8 @@ async def forward_to_agent(
             "Upstream agent returned an invalid response (a task must be finished)",
             "invalid_response",
         )
+    if "error" not in reply:
+        await _count_turn(recorder, agent_id, key, message, reply)
     if not guarded or "error" in reply:
         # A result with no guardrails, or the agent's own JSON-RPC error: byte for byte.
         return Response(
@@ -211,13 +220,41 @@ async def forward_to_agent(
             message,
             "output",
             StageOutcome(trace=trace, blocked_reason=outbound.blocked_reason),
+            role,
         )
-    a2a.add_hub_metadata(result, {"trace": dump_trace(trace)})
+    hub: dict[str, Any] = {"trace": dump_trace(trace), "policyVersion": policy.version}
+    if role is not None:
+        hub["role"] = role
+    a2a.add_hub_metadata(result, hub)
     return JSONResponse(reply)
 
 
-def _blocked(rpc_id: Any, message: a2a.Json, stage: str, outcome: StageOutcome) -> JSONResponse:
+async def _count_turn(
+    recorder: AuditRecorder, agent_id: str, key: str, message: a2a.Json, reply: a2a.Json
+) -> None:
+    """A-07: count the turn the agent answered (no content). Failures never change the reply."""
+    context_id = message.get("contextId")
+    if not isinstance(context_id, str) or not context_id:
+        return
+    try:
+        input_tokens, output_tokens = a2a.usage_tokens(reply)
+        await run_in_threadpool(
+            recorder.record_turn, agent_id, key, context_id, input_tokens, output_tokens, 0.0
+        )
+    except Exception:  # noqa: BLE001 - audit storage must not break a successful call
+        logger.warning("Could not record a turn for agent %s", agent_id, exc_info=True)
+
+
+def _blocked(
+    rpc_id: Any,
+    message: a2a.Json,
+    stage: str,
+    outcome: StageOutcome,
+    role: str | None = None,
+) -> JSONResponse:
     """The refusal task for a blocked call; the agent's reply, if any, is never shown."""
-    hub = {"blocked": True, "stage": stage, "trace": dump_trace(outcome.trace)}
+    hub: dict[str, Any] = {"blocked": True, "stage": stage, "trace": dump_trace(outcome.trace)}
+    if role is not None:
+        hub["role"] = role
     task = a2a.rejected_task(message.get("contextId"), outcome.blocked_reason or "Blocked", hub)
     return JSONResponse({"jsonrpc": a2a.JSONRPC_VERSION, "id": rpc_id, "result": task})

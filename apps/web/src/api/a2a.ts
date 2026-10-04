@@ -11,7 +11,7 @@ export interface TraceEntry {
   guardrailName: string
   engine: 'regex' | 'llm_judge' | 'library' | 'moderation'
   stage: 'input' | 'output'
-  verdict: 'pass' | 'block' | 'redact' | 'warn'
+  verdict: 'pass' | 'block' | 'redact' | 'warn' | 'skipped' | 'error'
   reason: string
   latencyMs: number
   simulated?: boolean
@@ -20,6 +20,9 @@ export interface TraceEntry {
 export interface GuardrailHubMetadata {
   blocked?: boolean
   stage?: 'input' | 'output'
+  policyVersion?: string
+  role?: string
+  userId?: string
   trace?: TraceEntry[]
   usage?: { inputTokens: number; outputTokens: number; costUsd?: number }
   limits?: { name: string; used: number; max: number; unit?: string }[]
@@ -82,6 +85,8 @@ export interface Reply {
   limits: NonNullable<GuardrailHubMetadata['limits']>
   scores: NonNullable<GuardrailHubMetadata['scores']>
   errorMessage?: string
+  /** Made up in the browser while the API has no test chat endpoint (B-06); see testChatSimulator. */
+  simulated?: boolean
 }
 
 export const UNFINISHED_TASK = "The agent answered with an unfinished task (outside the hub's A2A profile)."

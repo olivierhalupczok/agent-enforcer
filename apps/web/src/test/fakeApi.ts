@@ -1,11 +1,14 @@
 // Test double for the real guardrail and signature endpoints in apps/api: same paths, shapes and
 // error format ({detail}). The browser never uses it — MSW bypasses these paths to the real API.
 import { http, HttpResponse } from 'msw'
-import type { SendMessageRequest, SendMessageResponse, TraceEntry } from '../api/a2a'
+import type { SendMessageRequest } from '../api/a2a'
 import { apiPath } from '../api/client'
+import { simulateTestChat } from '../api/testChatSimulator'
 import type {
   Agent,
   AgentCard,
+  AgentSession,
+  AuditEvent,
   AgentRegistration,
   Binding,
   BindingCreate,
@@ -26,7 +29,13 @@ import type {
 import { TEST_TOKEN } from './fakeAuth'
 
 export const FAKE_TEMPLATES: GuardrailTemplate[] = [
-  { id: 'pii', label: 'PII', engines: ['library', 'regex'], actions: ['block', 'redact', 'warn'] },
+  {
+    id: 'pii',
+    label: 'PII',
+    engines: ['library'],
+    actions: ['block', 'redact', 'warn'],
+    entities: ['EMAIL', 'PHONE', 'CREDIT_CARD', 'IBAN'],
+  },
   { id: 'prompt_injection', label: 'Prompt injection', engines: ['regex', 'llm_judge'], actions: ['block', 'warn'] },
   { id: 'toxicity', label: 'Toxicity', engines: ['moderation', 'llm_judge'], actions: ['block', 'warn'] },
   { id: 'topic', label: 'Topic allow/deny list', engines: ['llm_judge'], actions: ['block', 'warn'] },
@@ -119,6 +128,31 @@ const notAuthenticated = () => detail(401, 'Not authenticated')
 
 const methodNotAllowed = () => detail(405, 'Method Not Allowed')
 
+const T0 = Date.parse('2026-10-04T10:00:00Z')
+const at = (minutes: number) => new Date(T0 + minutes * 60_000).toISOString()
+
+function seedAuditEvents(): AuditEvent[] {
+  // newest first, like the API
+  const base = { agent_name: null, config_version: 'v-3f2a', stage: null } as const
+  return [
+    { ...base, id: 'ev-5', at: at(9), agent_id: 'agent-support', context_id: 'ctx-stopped', rule_id: 'maxSessionTokens', rule_name: 'Session tokens', kind: 'limit', action: 'block', details: 'Session token cap reached' },
+    { ...base, id: 'ev-4', at: at(8), agent_id: 'agent-support', context_id: 'ctx-stopped', rule_id: 'g-pii', rule_name: 'PII', kind: 'guardrail', stage: 'output', action: 'redact', details: 'Email address' },
+    { ...base, id: 'ev-3', at: at(6), agent_id: 'agent-contracts', context_id: 'ctx-contracts', rule_id: 'g-pii', rule_name: 'PII', kind: 'guardrail', stage: 'input', action: 'warn', details: 'Phone number' },
+    { ...base, id: 'ev-2', at: at(4), agent_id: 'agent-support', context_id: 'ctx-active', rule_id: 'g-inject', rule_name: 'Prompt injection', kind: 'guardrail', stage: 'input', action: 'block', details: 'Matched signature "ignore previous"' },
+    { ...base, id: 'ev-1', at: at(2), agent_id: 'agent-support', context_id: 'ctx-active', rule_id: 'g-pii', rule_name: 'PII', kind: 'guardrail', stage: 'output', action: 'redact', details: 'Card number' },
+  ]
+}
+
+function seedSessions(): AgentSession[] {
+  const base = { agent_name: null, cost_usd: 0, limits: [] }
+  return [
+    { ...base, agent_id: 'agent-support', context_id: 'ctx-stopped', turns: 6, input_tokens: 5200, output_tokens: 4800, started_at: at(0), last_at: at(9), duration_seconds: 540, status: 'stopped', stop_reason: 'Session token cap reached', events: 2,
+      limits: [{ name: 'Session tokens', used: 10000, max: 10000, unit: 'tokens' }] },
+    { ...base, agent_id: 'agent-contracts', context_id: 'ctx-contracts', turns: 2, input_tokens: 300, output_tokens: 120, started_at: at(5), last_at: at(6), duration_seconds: 60, status: 'active', stop_reason: null, events: 1 },
+    { ...base, agent_id: 'agent-support', context_id: 'ctx-active', turns: 3, input_tokens: 90, output_tokens: 75, started_at: at(1), last_at: at(4), duration_seconds: 180, status: 'active', stop_reason: null, events: 2 },
+  ]
+}
+
 function seedMcpServers(): McpServer[] {
   return [
     {
@@ -154,93 +188,6 @@ function effectiveFor(agentId: string): EffectiveGuardrail[] {
   return [...mandatory, ...bound]
 }
 
-const trace = (
-  name: string,
-  stage: TraceEntry['stage'],
-  verdict: TraceEntry['verdict'],
-  reason: string,
-  engine: TraceEntry['engine'] = 'regex',
-  simulated = false,
-): TraceEntry => ({
-  guardrailId: `gr-${name.toLowerCase().replace(/\W+/g, '-')}`,
-  guardrailName: name,
-  engine,
-  stage,
-  verdict,
-  reason,
-  latencyMs: 3,
-  ...(simulated ? { simulated } : {}),
-})
-
-const INJECTION_PASS = trace('Prompt injection detector', 'input', 'pass', 'No match')
-
-// Imitates the gateway in front of apps/test-agent (its triggers start the message).
-function fakeGateway(request: SendMessageRequest): SendMessageResponse {
-  const { message } = request.params
-  const text = message.parts.map((p) => ('text' in p ? p.text : '')).join('\n')
-  const contextId = message.contextId ?? 'ctx-new'
-  const usage = { inputTokens: text.split(/\s+/).length, outputTokens: 12, costUsd: 0.0002 }
-  const limits = [{ name: 'Session tokens', used: 24, max: 16000 }]
-  const reply = (replyText: string, runs: TraceEntry[]): SendMessageResponse => ({
-    jsonrpc: '2.0',
-    id: request.id,
-    result: {
-      message: {
-        messageId: `agent-${fakeApi.testChatRequests.length}`,
-        contextId,
-        role: 'ROLE_AGENT',
-        parts: [{ text: replyText }],
-        metadata: { guardrailHub: { trace: runs, usage, limits } },
-      },
-    },
-  })
-  const blocked = (stage: 'input' | 'output', runs: TraceEntry[], why: string): SendMessageResponse => ({
-    jsonrpc: '2.0',
-    id: request.id,
-    result: {
-      task: {
-        id: `blk-${fakeApi.testChatRequests.length}`,
-        contextId,
-        status: {
-          state: 'TASK_STATE_REJECTED',
-          message: { messageId: `agent-${fakeApi.testChatRequests.length}`, role: 'ROLE_AGENT', parts: [{ text: why }] },
-        },
-        metadata: { guardrailHub: { blocked: true, stage, trace: runs, usage, limits } },
-      },
-    },
-  })
-  switch (text.trim().split(/\s+/)[0]) {
-    case '#pii':
-      return reply('Reach me at [EMAIL] or [PHONE].', [
-        INJECTION_PASS,
-        trace('PII redaction', 'output', 'redact', 'Found EMAIL, PHONE', 'library'),
-      ])
-    case '#secret':
-      return reply('Use key [REDACTED].', [INJECTION_PASS, trace('Secret keys', 'output', 'redact', 'Matched /AKIA[0-9A-Z]{16}/')])
-    case '#inject':
-      return blocked(
-        'input',
-        [trace('Prompt injection detector', 'input', 'block', 'Matched injection signature: ignore-instructions')],
-        'Blocked by guardrail "Prompt injection detector": ignore-instructions signature matched.',
-      )
-    case '#toxic':
-      return blocked(
-        'output',
-        [INJECTION_PASS, trace('Toxicity filter', 'output', 'block', 'Simulated: Abusive language: idiot', 'moderation', true)],
-        'Blocked by guardrail "Toxicity filter".',
-      )
-    case '#offtopic':
-      return reply("Let's talk about elections and crypto.", [
-        INJECTION_PASS,
-        trace('Topic: orders and returns only', 'output', 'warn', 'Simulated: Mentions a denied topic: crypto', 'llm_judge', true),
-      ])
-    case '#error':
-      return { jsonrpc: '2.0', id: request.id, error: { code: -32603, message: 'Internal error' } }
-    default:
-      return reply(`You said: ${text}`, [INJECTION_PASS])
-  }
-}
-
 export const cardUnreachable = (baseUrl: string) =>
   `Could not fetch the agent's A2A Agent Card from ${baseUrl.replace(/\/$/, '')}/.well-known/agent-card.json`
 
@@ -265,6 +212,11 @@ export const fakeApi: {
   gatewayKeyCount: number
   mcpServers: McpServer[]
   lastMcpServerCreate: McpServerCreate | null
+  auditEvents: AuditEvent[]
+  sessions: AgentSession[]
+  auditSupported: boolean
+  auditPageSize: number
+  auditRequests: URL[]
 } = {
   guardrails: seedGuardrails(),
   signatures: seedSignatures(),
@@ -282,6 +234,11 @@ export const fakeApi: {
   gatewayKeyCount: 0,
   mcpServers: seedMcpServers(),
   lastMcpServerCreate: null,
+  auditEvents: seedAuditEvents(),
+  sessions: seedSessions(),
+  auditSupported: true,
+  auditPageSize: 50,
+  auditRequests: [],
   bindings: seedBindings(),
   bindingsSupported: true,
   bindingRequests: [],
@@ -309,6 +266,11 @@ export function resetFakeApi(): void {
   fakeApi.gatewayKeyCount = 0
   fakeApi.mcpServers = seedMcpServers()
   fakeApi.lastMcpServerCreate = null
+  fakeApi.auditEvents = seedAuditEvents()
+  fakeApi.sessions = seedSessions()
+  fakeApi.auditSupported = true
+  fakeApi.auditPageSize = 50
+  fakeApi.auditRequests = []
 }
 
 const detail = (status: number, message: string) => HttpResponse.json({ detail: message }, { status })
@@ -354,6 +316,13 @@ function fakeDryRun(body: DryRunRequest): DryRunResult {
 }
 
 const isAdmin = (request: Request) => request.headers.get('X-Role') === 'admin'
+
+function page<T>(rows: T[], params: URLSearchParams): { data: T[]; next_cursor: string | null } {
+  const start = Number(params.get('before') ?? 0)
+  const size = Number(params.get('limit')) || fakeApi.auditPageSize
+  const end = start + size
+  return { data: rows.slice(start, end), next_cursor: end < rows.length ? String(end) : null }
+}
 
 export const fakeApiHandlers = [
   http.get(apiPath('/guardrail-templates'), () => HttpResponse.json(FAKE_TEMPLATES)),
@@ -484,6 +453,36 @@ export const fakeApiHandlers = [
     fakeApi.agents = fakeApi.agents.filter((a) => a.id !== params.id)
     return new HttpResponse(null, { status: 204 })
   }),
+  http.get(apiPath('/audit-events'), ({ request }) => {
+    if (!fakeApi.auditSupported) return detail(404, 'Not Found')
+    const url = new URL(request.url)
+    fakeApi.auditRequests.push(url)
+    const p = url.searchParams
+    const rows = fakeApi.auditEvents.filter(
+      (e) =>
+        (!p.get('agent_id') || e.agent_id === p.get('agent_id')) &&
+        (!p.get('rule_id') || e.rule_id === p.get('rule_id')) &&
+        (!p.get('action') || e.action === p.get('action')) &&
+        (!p.get('context_id') || e.context_id === p.get('context_id')),
+    )
+    return HttpResponse.json(page(rows, p))
+  }),
+
+  http.get(apiPath('/audit-events/rules'), () => {
+    if (!fakeApi.auditSupported) return detail(404, 'Not Found')
+    const rules = new Map(fakeApi.auditEvents.map((e) => [e.rule_id, { rule_id: e.rule_id, rule_name: e.rule_name, kind: e.kind }]))
+    return HttpResponse.json([...rules.values()])
+  }),
+
+  http.get(apiPath('/sessions'), ({ request }) => {
+    if (!fakeApi.auditSupported) return detail(404, 'Not Found')
+    const p = new URL(request.url).searchParams
+    const rows = fakeApi.sessions.filter(
+      (s) => (!p.get('agent_id') || s.agent_id === p.get('agent_id')) && (!p.get('status') || s.status === p.get('status')),
+    )
+    return HttpResponse.json(page(rows, p))
+  }),
+
   http.get(apiPath('/mcp-servers'), () => HttpResponse.json(fakeApi.mcpServers)),
 
   http.post(apiPath('/mcp-servers'), async ({ request }) => {
@@ -534,7 +533,7 @@ export const fakeApiHandlers = [
     if (!fakeApi.agents.some((a) => a.id === params.id)) return detail(404, 'Agent not found')
     const body = (await request.json()) as SendMessageRequest
     fakeApi.testChatRequests.push(body)
-    return HttpResponse.json(fakeGateway(body))
+    return HttpResponse.json(simulateTestChat(body, { serial: fakeApi.testChatRequests.length }))
   }),
 
   http.post(apiPath('/agents/:id/flags'), async ({ request }) => {
