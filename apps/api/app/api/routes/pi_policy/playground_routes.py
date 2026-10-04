@@ -8,12 +8,14 @@ extension, so a reviewer can watch policy enforcement live. See
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from app.pi_policy.playground import (
     PlaygroundError,
     RunRequest,
     RunResult,
+    injection_page,
     list_scenarios,
     reset_sandbox,
     run_scenario,
@@ -53,6 +55,12 @@ def get_hosts(service: Service) -> list[HostOption]:
     options = [HostOption(id="playground-global", label="Global (defaults)")]
     options += [HostOption(id=name, label=name) for name in (policy.get("agents") or {})]
     return options
+
+
+@router.get("/injection-page", response_class=PlainTextResponse)
+def get_injection_page() -> str:
+    """The deliberately malicious (but harmless) page for the injection scenario."""
+    return injection_page()
 
 
 @router.post("/run")

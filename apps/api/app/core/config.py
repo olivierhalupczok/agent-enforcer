@@ -29,6 +29,9 @@ class Settings(BaseSettings):
 
     # pi playground
     REPO_ROOT: str = str(_REPO_ROOT)
+    # base URL the playground advertises for its served pages (the pi agent fetches it)
+    PLAYGROUND_BASE_URL: str = "http://127.0.0.1:8000"
+    INCIDENTS_PATH: str = str(_REPO_ROOT / ".pi" / "incidents.json")
 
 
 settings = Settings()

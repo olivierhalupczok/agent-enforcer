@@ -35,6 +35,11 @@
             }
           }
         },
+        "blockedLinks": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/linkRule" },
+          "description": "URLs the agent may not fetch. The control layer appends rules here automatically when a fetched source trips an injection signature (auto-ban)."
+        },
         "commands": {
           "type": "object",
           "additionalProperties": false,
@@ -186,6 +191,28 @@
           }
         }
       }
+    },
+    "linkRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]*$",
+          "description": "Stable rule id; referenced by the audit log and the GUI."
+        },
+        "pattern": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Glob matched against the full URL. Comma-separated globs allowed."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Human-readable reason, shown to the agent on block and in the GUI."
+        },
+        "enabled": { "type": "boolean", "default": true }
+      },
+      "required": ["id", "pattern"]
     },
     "commandRule": {
       "type": "object",

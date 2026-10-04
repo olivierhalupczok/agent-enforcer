@@ -143,7 +143,7 @@
     },
     "injection": {
       "enabled": true,
-      "onDetect": "warn",
+      "onDetect": "block",
       "scanToolResults": true,
       "scanUserInput": false,
       "patterns": [
