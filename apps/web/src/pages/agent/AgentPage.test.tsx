@@ -22,7 +22,7 @@ describe('AgentPage', () => {
     expect(o.getByText('Authorization')).toBeInTheDocument()
     expect(o.getByText('agent-support')).toBeInTheDocument()
     expect(o.getByText('1')).toBeInTheDocument() // config version
-    expect(screen.getByRole('link', { name: '← Agents' })).toHaveAttribute('href', '/agents')
+    expect(within(screen.getByRole('main')).getByRole('link', { name: 'Agents' })).toHaveAttribute('href', '/agents')
   })
 
   it('shows dashes and None for an agent without description or auth header', async () => {

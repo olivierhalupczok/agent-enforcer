@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { AgentPolicy, PiPolicy, SchemaError } from '../../api/piPolicy'
 import { apiPath } from '../../api/client'
 import { usePiPolicy, useSavePiPolicy, validatePiPolicy } from '../../api/piPolicy'
 import { buttonPrimary, buttonSecondary } from '../../ui/classes'
+import { PageHeader, PageShell } from '../../ui/Page'
 import { AgentPolicyEditor } from './AgentPolicyEditor'
 import { newAgentPolicy } from './policyDisplay'
 
@@ -29,6 +30,16 @@ export function PolicyPage() {
   )
 
   const current: PiPolicy | null = loaded && draft ? draft : (loaded?.policy ?? null)
+
+  useEffect(() => {
+    if (!dirty) return
+    const protectDraft = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', protectDraft)
+    return () => window.removeEventListener('beforeunload', protectDraft)
+  }, [dirty])
 
   const update = (next: PiPolicy) => {
     setDraft(next)
@@ -80,6 +91,7 @@ export function PolicyPage() {
   }
 
   const reload = () => {
+    if (dirty && !window.confirm('Reload and discard your unsaved policy changes?')) return
     setDraft(null)
     setSaveState({ kind: 'idle' })
     void query.refetch()
@@ -104,11 +116,12 @@ export function PolicyPage() {
   }
 
   return (
-    <section className="flex flex-col gap-5">
-      <header className="flex flex-wrap items-center gap-x-6 gap-y-2">
-        <div className="mr-auto">
-          <h1 className="m-0 text-[28px] font-semibold tracking-tight">Policies</h1>
-          <p className="m-0 text-[13px] text-muted">
+    <PageShell>
+      <PageHeader
+        title="Policies"
+        description="Prototype editor for the pi coding-agent control layer. Changes write directly to the repository policy file."
+        meta={
+          <span>
             {loaded ? (
               <>
                 <span className="font-mono">{loaded.path}</span>
@@ -118,9 +131,9 @@ export function PolicyPage() {
             ) : (
               'pi control layer policy (.pi/policy.json)'
             )}
-          </p>
-        </div>
-        {loaded && (
+          </span>
+        }
+        actions={loaded && (
           <>
             <button
               type="button"
@@ -143,7 +156,7 @@ export function PolicyPage() {
             </button>
           </>
         )}
-      </header>
+      />
 
       {query.isError && (
         <div role="alert" className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-6">
@@ -170,7 +183,7 @@ export function PolicyPage() {
         <>
           {saveState.kind === 'saved' && (
             <div role="status" className={`${bannerBase} border-[#BFE3D2] bg-[#EAF6F0] text-[#0B5A51]`}>
-              ✓ {saveState.message}
+              {saveState.message}
             </div>
           )}
           {saveState.kind === 'error' && (
@@ -202,13 +215,13 @@ export function PolicyPage() {
           )}
           {dirty && saveState.kind !== 'error' && (
             <div role="status" className={`${bannerBase} border-[#EAD3A2] bg-warn-bg text-warn-fg`}>
-              Unsaved changes — remember to save.
+              Unsaved changes. Save before leaving this page.
             </div>
           )}
 
           {/* defaults */}
           <section aria-labelledby="policy-defaults-heading" className="rounded-xl border border-line bg-surface p-5">
-            <div className="mb-4 flex items-baseline gap-3">
+            <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <h2 id="policy-defaults-heading" className="m-0 text-base font-semibold">
                 Global rules
               </h2>
@@ -224,24 +237,32 @@ export function PolicyPage() {
               aria-labelledby={`policy-agent-${name}-heading`}
               className="rounded-xl border border-line bg-surface p-5"
             >
-              <div className="mb-4 flex items-baseline gap-3">
+              <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
                 <h2 id={`policy-agent-${name}-heading`} className="m-0 text-base font-semibold">
                   <span className="font-mono">{name}</span>
                 </h2>
-                <span className="text-xs text-muted">overrides the global rules for this agent</span>
-                <button
-                  type="button"
-                  className="ml-auto cursor-pointer rounded-lg border border-line-strong bg-surface px-3 py-1.5 text-xs font-medium text-danger hover:bg-[#FBEAE6]"
-                  onClick={() => {
-                    if (confirming) {
-                      updateAgent(name, undefined)
-                    } else {
-                      setConfirming(name)
-                    }
-                  }}
-                >
-                  {confirming === name ? 'Confirm remove' : 'Remove override'}
-                </button>
+                <span className="text-xs text-muted">sections replace their global counterparts; rule lists never merge</span>
+                <div className="ml-auto flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="cursor-pointer rounded-lg border border-line-strong bg-surface px-3 py-1.5 text-xs font-medium text-danger hover:bg-[#FBEAE6]"
+                    onClick={() => {
+                      if (confirming === name) {
+                        updateAgent(name, undefined)
+                        setConfirming(null)
+                      } else {
+                        setConfirming(name)
+                      }
+                    }}
+                  >
+                    {confirming === name ? `Confirm remove ${name}` : 'Remove override'}
+                  </button>
+                  {confirming === name && (
+                    <button type="button" className={buttonSecondary} onClick={() => setConfirming(null)}>
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </div>
               <AgentPolicyEditor value={agentPolicy} disabled={false} onChange={(next) => updateAgent(name, next)} />
             </section>
@@ -250,7 +271,7 @@ export function PolicyPage() {
           <AddAgentForm onAdd={addAgent} names={Object.keys(current.agents ?? {})} />
         </>
       )}
-    </section>
+    </PageShell>
   )
 }
 

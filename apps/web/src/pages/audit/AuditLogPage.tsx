@@ -5,6 +5,7 @@ import type { AuditAction, AuditEvent, AuditFilters } from '../../api/types'
 import { badgeClass, buttonSecondary, inputClass } from '../../ui/classes'
 import { formatTime, shortId } from '../../ui/format'
 import { LiveBadge } from '../../ui/LiveBadge'
+import { EmptyState, LoadingRows, PageHeader, PageShell, TableFrame } from '../../ui/Page'
 import { LoadError } from '../ApiUnavailable'
 
 const ACTIONS: Record<AuditAction, { label: string; className: string }> = {
@@ -53,19 +54,31 @@ export function AuditLogPage() {
   if (events.isError) {
     content = <LoadError what="audit events" error={events.error} onRetry={() => void events.refetch()} />
   } else if (events.isPending) {
-    content = <p className="m-0 text-sm text-muted">Loading audit events…</p>
+    content = <LoadingRows label="Loading audit events" count={4} />
   } else if (list.length === 0) {
     content = (
-      <div className="rounded-xl border border-dashed border-line-strong bg-surface p-6 text-sm text-muted">
-        {filtered ? 'No events match these filters.' : 'No audit events yet. Blocks, redactions, warnings and limit hits appear here.'}
-      </div>
+      <EmptyState
+        title={filtered ? 'No matching events' : 'No audit events yet'}
+        description={
+          filtered
+            ? 'No events match these filters.'
+            : 'No audit events yet. Blocks, redactions, warnings and limit hits appear here.'
+        }
+        action={
+          filtered ? (
+            <button type="button" className={buttonSecondary} onClick={() => setParams(new URLSearchParams())}>
+              Clear filters
+            </button>
+          ) : undefined
+        }
+      />
     )
   } else {
     content = (
       <>
-        <div role="region" aria-label="Audit events table" tabIndex={0} className="overflow-x-auto rounded-xl border border-line bg-surface">
-          <table className="w-full min-w-[960px] border-collapse text-left text-sm">
-            <thead>
+        <TableFrame label="Audit events table">
+          <table className="w-full min-w-[960px] border-collapse text-left text-sm tabular-nums">
+            <thead className="bg-[#F9F9F6]">
               <tr className="border-b border-line text-xs tracking-[0.04em] text-muted uppercase">
                 {HEADERS.map((h) => (
                   <th key={h} scope="col" className="px-4 py-3 font-semibold">{h}</th>
@@ -74,7 +87,7 @@ export function AuditLogPage() {
             </thead>
             <tbody>
               {list.map((event) => (
-                <tr key={event.id} className="border-b border-line last:border-b-0">
+                <tr key={event.id} className="border-b border-line transition-colors hover:bg-[#FAFAF7] last:border-b-0">
                   <td className={`${cell} whitespace-nowrap text-muted`}>{formatTime(event.at)}</td>
                   <td className={cell}>{agentName(event)}</td>
                   <td className={`${cell} font-mono text-xs`} title={event.context_id ?? undefined}>
@@ -96,7 +109,7 @@ export function AuditLogPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableFrame>
         {events.hasNextPage && (
           <button type="button" className={`${buttonSecondary} self-start`} disabled={events.isFetchingNextPage} onClick={() => void events.fetchNextPage()}>
             {events.isFetchingNextPage ? 'Loading…' : 'Load more'}
@@ -107,27 +120,35 @@ export function AuditLogPage() {
   }
 
   return (
-    <section className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex max-w-2xl flex-col gap-1.5">
-          <h1 className="m-0 text-[28px] font-semibold tracking-tight">Audit log</h1>
-          <p className="m-0 text-[15px] text-muted">Every block, redaction, warning and limit hit, newest first.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {live && <LiveBadge />}
-          <button type="button" className={buttonSecondary} onClick={() => void events.refetch()}>Refresh</button>
-        </div>
-      </header>
+    <PageShell>
+      <PageHeader
+        title="Audit log"
+        description="Every block, redaction, warning and limit hit, newest first."
+        actions={
+          <>
+            {live && <LiveBadge />}
+            <button type="button" className={buttonSecondary} disabled={events.isFetching} onClick={() => void events.refetch()}>
+              {events.isFetching && !events.isPending ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </>
+        }
+      />
 
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="flex min-w-48 flex-col gap-1.5">
+      <section aria-labelledby="audit-filters-heading" className="rounded-xl border border-line bg-surface p-4 sm:p-5">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 id="audit-filters-heading" className="m-0 text-sm font-semibold">Event view</h2>
+            <p className="mt-1 mb-0 text-xs text-muted">Narrow events by agent, rule, result, or linked session.</p>
+          </div>
+          <div className="flex w-full flex-wrap items-end gap-3 lg:w-auto">
+        <div className="flex min-w-48 flex-1 flex-col gap-1.5 lg:flex-none">
           <label htmlFor="audit-agent" className={labelClass}>Agent</label>
           <select id="audit-agent" value={filters.agent_id ?? ''} onChange={(e) => setFilter('agent_id', e.target.value)} className={inputClass}>
             <option value="">All agents</option>
             {agents.data?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
         </div>
-        <div className="flex min-w-48 flex-col gap-1.5">
+        <div className="flex min-w-48 flex-1 flex-col gap-1.5 lg:flex-none">
           <label htmlFor="audit-rule" className={labelClass}>Rule</label>
           <select id="audit-rule" value={filters.rule_id ?? ''} onChange={(e) => setFilter('rule_id', e.target.value)} className={inputClass}>
             <option value="">All rules</option>
@@ -143,7 +164,7 @@ export function AuditLogPage() {
             )}
           </select>
         </div>
-        <div className="flex min-w-40 flex-col gap-1.5">
+        <div className="flex min-w-40 flex-1 flex-col gap-1.5 lg:flex-none">
           <label htmlFor="audit-action" className={labelClass}>Result</label>
           <select id="audit-action" value={filters.action ?? ''} onChange={(e) => setFilter('action', e.target.value)} className={inputClass}>
             <option value="">All results</option>
@@ -155,17 +176,21 @@ export function AuditLogPage() {
         {filters.context_id && (
           <span className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-canvas px-3 text-sm">
             Session <code className="text-xs">{shortId(filters.context_id)}</code>
-            <button type="button" aria-label={`Remove session filter ${filters.context_id}`} onClick={() => setFilter('context_id', '')} className="cursor-pointer border-0 bg-transparent text-muted">
-              ×
+            <button type="button" aria-label={`Remove session filter ${filters.context_id}`} onClick={() => setFilter('context_id', '')} className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted hover:bg-line hover:text-ink">
+              <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4" fill="none">
+                <path d="m4 4 8 8m0-8-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
             </button>
           </span>
         )}
         {filtered && (
           <button type="button" className={buttonSecondary} onClick={() => setParams(new URLSearchParams())}>Clear filters</button>
         )}
-      </div>
+          </div>
+        </div>
+      </section>
 
       {content}
-    </section>
+    </PageShell>
   )
 }

@@ -34,6 +34,17 @@ describe('AppRoutes', () => {
     expect(location()).toBe('/sessions')
   })
 
+  it.each(['/approvals', '/evals'])('redirects removed placeholder route %s to /sessions', (path) => {
+    renderApp(path)
+    expect(location()).toBe('/sessions')
+  })
+
+  it('does not advertise removed placeholder features', () => {
+    renderApp('/sessions')
+    expect(within(mainNav()).queryByRole('link', { name: 'Approvals' })).not.toBeInTheDocument()
+    expect(within(mainNav()).queryByRole('link', { name: 'Evaluators' })).not.toBeInTheDocument()
+  })
+
   it('keeps Agents active on an agent page', async () => {
     renderApp('/agents/support-bot')
     expect(await screen.findByRole('heading', { level: 1, name: 'Agent not found' })).toBeInTheDocument()

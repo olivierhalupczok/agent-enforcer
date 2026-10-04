@@ -50,4 +50,58 @@
   .on-dark :focus-visible {
     outline-color: var(--color-teal-bright);
   }
+
+  ::selection {
+    background: var(--color-teal-soft);
+    color: var(--color-teal-dark);
+  }
+
+  html {
+    scrollbar-color: var(--color-line-strong) var(--color-canvas);
+  }
+
+  select:not([multiple]) {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4 6 4 4 4-4' stroke='%235A5F68' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-position: right 0.875rem center;
+    background-repeat: no-repeat;
+    background-size: 1rem;
+    padding-right: 2.75rem;
+  }
+
+  @media (forced-colors: active) {
+    select:not([multiple]) {
+      appearance: auto;
+      background-image: none;
+      padding-right: 0.75rem;
+    }
+  }
+}
+
+@layer components {
+  .sessions-table,
+  .data-table {
+    scrollbar-color: var(--color-line-strong) var(--color-surface);
+    scrollbar-width: thin;
+  }
+
+  .session-limit-meter {
+    appearance: none;
+    border: 0;
+    background: var(--color-line);
+  }
+
+  .session-limit-meter::-webkit-progress-bar {
+    background: var(--color-line);
+  }
+
+  .session-limit-meter::-webkit-progress-value {
+    background: var(--color-teal);
+    border-radius: 999px;
+  }
+
+  .session-limit-meter::-moz-progress-bar {
+    background: var(--color-teal);
+    border-radius: 999px;
+  }
 }

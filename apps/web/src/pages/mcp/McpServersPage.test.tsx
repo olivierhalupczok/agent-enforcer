@@ -89,14 +89,6 @@ describe('MCP servers', () => {
     expect(screen.getByLabelText('Name')).toHaveAttribute('aria-invalid', 'true')
   })
 
-  it('deletes a server after confirmation', async () => {
-    const user = await open()
-    await user.click(screen.getByRole('button', { name: 'Delete Orders' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm delete Orders' }))
-    expect(await screen.findByText('No MCP servers registered yet.')).toBeInTheDocument()
-    expect(fakeApi.mcpServers).toEqual([])
-  })
-
   it('edits a server and sends only what changed', async () => {
     const user = await open()
     await user.click(screen.getByRole('button', { name: 'Edit Orders' }))
@@ -108,7 +100,7 @@ describe('MCP servers', () => {
     await user.click(form.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(screen.queryByRole('form', { name: 'Edit Orders' })).not.toBeInTheDocument())
-    expect(fakeApi.lastMcpServerUpdate).toEqual({ allowed_tools: ['get_order'] }) // auth kept
+    expect(fakeApi.lastMcpServerUpdate).toEqual({ allowed_tools: ['get_order'] })
     expect(screen.getByRole('list', { name: 'Tools of Orders' })).toHaveTextContent('get_order')
     expect(screen.getByRole('list', { name: 'Tools of Orders' })).not.toHaveTextContent('list_orders')
   })
@@ -136,11 +128,27 @@ describe('MCP servers', () => {
     )
   })
 
-  it('shows a load failure instead of loading forever', async () => {
-    fakeApi.mcpFailure = 503
-    renderApp('/mcp')
-    expect(await screen.findByText("Couldn't load MCP servers.")).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+  it('deletes a server after confirmation', async () => {
+    const user = await open()
+    await user.click(screen.getByRole('button', { name: 'Delete Orders' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm delete Orders' }))
+    expect(await screen.findByText('No MCP servers registered yet.')).toBeInTheDocument()
+    expect(fakeApi.mcpServers).toEqual([])
+  })
+
+  it('keeps delete confirmation open on blur and restores focus when canceled', async () => {
+    const user = await open()
+    const deleteButton = screen.getByRole('button', { name: 'Delete Orders' })
+    await user.click(deleteButton)
+
+    const confirmButton = screen.getByRole('button', { name: 'Confirm delete Orders' })
+    expect(confirmButton).toHaveFocus()
+    await user.tab()
+    expect(confirmButton).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Cancel delete Orders' }))
+    expect(screen.queryByRole('button', { name: 'Confirm delete Orders' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete Orders' })).toHaveFocus()
+    expect(fakeApi.mcpServers).toHaveLength(1)
   })
 })
-

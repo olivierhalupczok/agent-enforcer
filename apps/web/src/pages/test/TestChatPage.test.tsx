@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { delay, http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
@@ -82,6 +82,15 @@ describe('Test chat', () => {
     expect(screen.getByLabelText('Message')).toHaveValue('')
   })
 
+  it('does not send Enter while an IME composition is active', async () => {
+    await open()
+    const message = screen.getByLabelText('Message')
+    fireEvent.change(message, { target: { value: 'composing' } })
+    fireEvent.keyDown(message, { key: 'Enter', isComposing: true })
+    expect(fakeApi.testChatRequests).toHaveLength(0)
+    expect(message).toHaveValue('composing')
+  })
+
   it('shows agent errors with a Retry that keeps the context', async () => {
     const user = await open()
     await user.type(screen.getByLabelText('Message'), '#error{Enter}')
@@ -109,6 +118,15 @@ describe('Test chat', () => {
     expect(fakeApi.testChatRequests).toEqual([]) // the API never answered: all simulated
     const trace = within(screen.getByRole('region', { name: 'Trace' }))
     expect(trace.getAllByText('Simulated').length).toBeGreaterThan(0)
+  })
+
+  it('reveals the trace when a reply is inspected', async () => {
+    const user = await open()
+    await user.click(screen.getByRole('button', { name: '#pii' }))
+    const inspect = await screen.findByRole('button', { name: 'Inspect reply 1' })
+    expect(screen.getByRole('button', { name: 'Show trace' })).toHaveAttribute('aria-expanded', 'false')
+    await user.click(inspect)
+    expect(screen.getByRole('button', { name: 'Hide trace' })).toHaveAttribute('aria-expanded', 'true')
   })
 
   it('asks to register an agent when there are none', async () => {

@@ -34,10 +34,12 @@ describe('Delete agent', () => {
     await waitFor(() => expect(queryClient.getQueryData(['agents', 'agent-support'])).toBeUndefined())
   })
 
-  it('cancels when focus moves away', async () => {
+  it('keeps confirmation open when focus moves and provides an explicit cancel', async () => {
     const user = await open()
     await user.click(screen.getByRole('button', { name: 'Delete' }))
     await user.tab()
+    expect(screen.getByRole('button', { name: 'Confirm delete' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument()
     expect(fakeApi.agents).toHaveLength(2)
   })

@@ -4,6 +4,7 @@ SUPABASE = pnpm dlx supabase@2.119.0
 
 install:
 	uv sync --all-packages
+	cd apps/api && uv sync
 	cd apps/web && pnpm install
 	cd apps/landing && pnpm install
 
@@ -30,6 +31,7 @@ lint:
 
 test:
 	uv run pytest
+	cd apps/api && uv run pytest
 
 supabase:
 	$(SUPABASE) start --workdir apps/api

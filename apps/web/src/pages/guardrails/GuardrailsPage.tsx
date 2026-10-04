@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useGuardrailTemplates, useGuardrails } from '../../api/guardrails'
 import { buttonPrimary, buttonSecondary } from '../../ui/classes'
+import { EmptyState, PageHeader, PageShell } from '../../ui/Page'
 import { GuardrailCard } from './GuardrailCard'
 import { NewGuardrailForm } from './NewGuardrailForm'
 import { SignaturesSection } from './SignaturesSection'
@@ -39,29 +40,43 @@ export function GuardrailsPage() {
           <button
             type="button"
             className={buttonSecondary}
+            disabled={templates.isFetching || guardrails.isFetching}
             onClick={() => {
               void templates.refetch()
               void guardrails.refetch()
             }}
           >
-            Retry
+            {templates.isFetching || guardrails.isFetching ? 'Retrying…' : 'Retry'}
           </button>
         </div>
       </div>
     )
   } else if (!loaded) {
     content = (
-      <div aria-busy="true" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div role="status" aria-label="Loading guardrails" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <span className="sr-only">Loading guardrails…</span>
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-40 animate-pulse rounded-xl border border-line bg-surface" />
+          <div key={i} className="flex min-h-56 flex-col gap-4 rounded-xl border border-line bg-surface p-5">
+            <span className="h-4 w-2/3 rounded-full bg-line" />
+            <span className="h-3 w-full rounded-full bg-line" />
+            <span className="h-3 w-4/5 rounded-full bg-line" />
+            <span className="mt-2 h-6 w-1/2 rounded-md bg-line" />
+            <span className="mt-auto h-11 w-full rounded-lg bg-line" />
+          </div>
         ))}
       </div>
     )
   } else if (guardrails.data.length === 0) {
     content = (
-      <div className="rounded-xl border border-dashed border-line-strong bg-surface p-6 text-sm text-muted">
-        No guardrails yet
-      </div>
+      <EmptyState
+        title="No guardrails yet"
+        description="Create a guardrail to check text going to or from a proxy agent."
+        action={
+          <button ref={newButtonRef} type="button" className={buttonPrimary} onClick={() => setCreating(true)}>
+            New guardrail
+          </button>
+        }
+      />
     )
   } else {
     content = (
@@ -74,20 +89,18 @@ export function GuardrailsPage() {
   }
 
   return (
-    <section className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex max-w-2xl flex-col gap-1.5">
-          <h1 className="m-0 text-[28px] font-semibold tracking-tight">Guardrails</h1>
-          <p className="m-0 text-[15px] text-muted">
-            Single checks on text going to or from a proxy agent. Each one runs on exactly one engine.
-          </p>
-        </div>
-        {loaded && !creating && (
-          <button ref={newButtonRef} type="button" className={buttonPrimary} onClick={() => setCreating(true)}>
-            New guardrail
-          </button>
-        )}
-      </header>
+    <PageShell>
+      <PageHeader
+        title="Guardrails"
+        description="Single checks on text going to or from a proxy agent. Each one runs on exactly one engine."
+        actions={
+          loaded && !creating && guardrails.data.length > 0 ? (
+            <button ref={newButtonRef} type="button" className={buttonPrimary} onClick={() => setCreating(true)}>
+              New guardrail
+            </button>
+          ) : undefined
+        }
+      />
       {creating && templates.data && (
         <NewGuardrailForm
           templates={templates.data}
@@ -95,8 +108,19 @@ export function GuardrailsPage() {
           onCreated={(guardrail) => setHighlightId(guardrail.id)}
         />
       )}
-      {content}
+      <section aria-labelledby="configured-guardrails-heading" className="flex flex-col gap-4">
+        <div className="flex items-baseline justify-between gap-4">
+          <div>
+            <h2 id="configured-guardrails-heading" className="m-0 text-lg font-semibold">Configured guardrails</h2>
+            <p className="mt-1 mb-0 text-sm text-muted">Review each check's engine, stage, action, and availability.</p>
+          </div>
+          {loaded && guardrails.data.length > 0 && (
+            <span className="text-sm text-muted tabular-nums">{guardrails.data.length} total</span>
+          )}
+        </div>
+        {content}
+      </section>
       <SignaturesSection />
-    </section>
+    </PageShell>
   )
 }
