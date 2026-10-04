@@ -109,4 +109,10 @@ def pi_env() -> dict[str, str]:
         env["PI_CODING_AGENT_DIR"] = str(agent_dir)
         env["PI_CODING_AGENT_SESSION_DIR"] = str(agent_dir / "sessions")
         (agent_dir / "sessions").mkdir(parents=True, exist_ok=True)
+    # pin the package dir so the vendored cli finds its dist assets (themes etc.)
+    # regardless of where package.json landed (Vercel prunes nested node_modules)
+    for pkg_dir in _PI_NPM_CANDIDATES:
+        if (pkg_dir / "dist" / "bundle" / "cli.js").is_file():
+            env["PI_PACKAGE_DIR"] = str(pkg_dir)
+            break
     return env

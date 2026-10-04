@@ -41,22 +41,36 @@ echo "==> [2/3] npm install pi coding agent"
 export NPM_CONFIG_FUND=false NPM_CONFIG_AUDIT=false
 npm install @earendil-works/pi-coding-agent@0.85.1 --prefix . --no-save --loglevel=error
 PKG="node_modules/@earendil-works/pi-coding-agent"
-rm -rf "$PKG/node_modules/@esbuild" "$PKG/node_modules/typescript" "$PKG/node_modules/@types" 2>/dev/null || true
-echo "    node_modules: $(du -sh node_modules 2>/dev/null | cut -f1 || echo '?')"
+echo "    node_modules (pre-trim): $(du -sh node_modules 2>/dev/null | cut -f1 || echo '?')"
 
 # copy the trimmed package next to the function file: the Python runtime always
 # ships files that sit inside the function's directory, no includeFiles needed
-echo "==> [2b] vendor pi package + node binary into api/_pi/"
+echo "==> [2b] vendor pi (single-file bundle) + node binary into api/_pi/"
+# Vercel's Python builder prunes nested node_modules/ dirs even when listed in
+# includeFiles, so the package must be self-contained: esbuild-inlines
+# @earendil-works/chord + typebox into dist/bundle/cli.js itself. No node_modules.
 rm -rf api/_pi
 mkdir -p api/_pi/pi-coding-agent
-# dist/bundle is self-contained except @earendil-works/chord + typebox
-# (verified: the bundle imports nothing else from nested node_modules)
+# pick the esbuild binary matching this machine (nested in the pi package,
+# which ships binaries for many platforms; only this platform's will execute)
+ESBUILD=""
+for cand in "$PKG"/node_modules/@esbuild/*/bin/esbuild; do
+  if "$cand" --version >/dev/null 2>&1; then ESBUILD="$cand"; break; fi
+done
+if [ -z "$ESBUILD" ]; then echo "    ERROR: working esbuild binary not found"; exit 1; fi
+echo "    esbuild: $(basename "$(dirname "$(dirname "$(dirname "$ESBUILD")")")") ($("$ESBUILD" --version))"
 cp -R "$PKG/dist" api/_pi/pi-coding-agent/dist
-mkdir -p api/_pi/pi-coding-agent/node_modules/@earendil-works
-cp -R "$PKG/node_modules/@earendil-works/chord" api/_pi/pi-coding-agent/node_modules/@earendil-works/chord
-cp -R "$PKG/node_modules/typebox" api/_pi/pi-coding-agent/node_modules/typebox
-# package.json needed for module resolution (type field / exports)
+# package.json: pi's getPackageDir() walks up to find it (themes, assets);
+# PI_PACKAGE_DIR env (set by the runner) pins it regardless
 cp "$PKG/package.json" api/_pi/pi-coding-agent/package.json
+# jiti: the extension loader require()s it at runtime; it has no deps of its own
+mkdir -p api/_pi/pi-coding-agent/node_modules
+cp -R "$PKG/node_modules/jiti" api/_pi/pi-coding-agent/node_modules/jiti
+"$ESBUILD" "$PKG/dist/bundle/cli.js" --bundle --platform=node --format=esm \
+  --outfile=api/_pi/pi-coding-agent/dist/bundle/cli.js 2>&1 | tail -1
+# drop the chunk files the single-file bundle replaces (keep dist/modes etc.)
+rm -rf api/_pi/pi-coding-agent/dist/bundle/chunks
+echo "    vendored cli.js: $(du -h api/_pi/pi-coding-agent/dist/bundle/cli.js | cut -f1)"
 echo "    api/_pi: $(du -sh api/_pi 2>/dev/null | cut -f1 || echo '?')"
 
 # the runtime lambda has no node on PATH (python runtime) — ship the build
@@ -72,8 +86,10 @@ fi
 # verify the vendored stack end to end
 if [ -x api/_pi/node ]; then
   ANTHROPIC_API_KEY=dummy api/_pi/node api/_pi/pi-coding-agent/dist/bundle/cli.js --provider anthropic --model claude-sonnet-4-5 --version >/dev/null 2>&1 \
-    && echo "    vendored pi runs OK" || echo "    WARNING: vendored pi did not run"
+    && echo "    vendored single-file pi runs OK" || echo "    WARNING: vendored pi did not run"
 fi
+rm -rf node_modules package-lock.json
+echo "    node_modules after trim: $(du -sh node_modules 2>/dev/null | cut -f1 || echo 'gone')"
 
 echo "==> [3/3] vendor pi-control-layer files"
 # locate the package either as repo sibling (repo layout) or already vendored
