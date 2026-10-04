@@ -66,9 +66,11 @@ export function useResetSandbox() {
 export interface Incident {
   ts: string
   agent: string
-  source: string
+  event: string
+  scope: string // 'defaults' (global config) or the host the rule came from
   hits: string[]
-  mode: 'warn' | 'block'
+  mode: 'warn' | 'block' | 'redacted'
+  tool: string | null
   detail: string
   url: string | null
   autoBanned: boolean

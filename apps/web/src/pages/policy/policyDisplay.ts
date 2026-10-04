@@ -85,8 +85,9 @@ export function ruleTitle(rule: RuleValue): string {
 }
 
 export function sectionLabel(key: keyof AgentPolicy): string {
-  const labels: Record<keyof AgentPolicy, string> = {
+  const labels: Partial<Record<keyof AgentPolicy, string>> = {
     identity: 'Identity',
+    blockedLinks: 'Blocked links',
     commands: 'Commands',
     files: 'Files',
     budget: 'Budget',
@@ -95,7 +96,7 @@ export function sectionLabel(key: keyof AgentPolicy): string {
     injection: 'Injection detection',
     controlPlane: 'Control plane',
   }
-  return labels[key]
+  return labels[key] ?? key
 }
 
 export function newAgentPolicy(): AgentPolicy {

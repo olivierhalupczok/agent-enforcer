@@ -1,6 +1,7 @@
 import type {
   AgentPolicy,
   BudgetSection,
+  CommandRule,
   ControlPlaneSection,
   InjectionSection,
   SystemPromptSection,
@@ -101,6 +102,31 @@ export function AgentPolicyEditor({ value, disabled, onChange, headerActions }: 
               onChange={(rules) => setRuleList('commands', spec.key, rules)}
             />
           ))}
+        </div>
+      </fieldset>
+
+      {/* blocked links — the auto-ban target: the extension appends rules here */}
+      <fieldset className="m-0 rounded-lg border border-line bg-canvas/60 p-3">
+        <legend className="px-1 text-[13px] font-semibold">Blocked links</legend>
+        <div className="flex flex-col gap-3">
+          <RuleList
+            spec={{
+              key: 'blockedLinks',
+              kind: 'command',
+              label: 'Banned URLs',
+              description:
+                'URLs the agent may not fetch. The control layer appends rules here automatically (auto-ban) when a source trips an injection signature.',
+            }}
+            showTimeout={false}
+            rules={value.blockedLinks}
+            disabled={disabled}
+            onChange={(rules) =>
+              onChange({
+                ...value,
+                blockedLinks: rules.length > 0 ? (rules as CommandRule[]) : undefined,
+              })
+            }
+          />
         </div>
       </fieldset>
 
@@ -231,7 +257,7 @@ export function AgentPolicyEditor({ value, disabled, onChange, headerActions }: 
                   set('injection', { ...(value.injection ?? {}), onDetect: e.target.value as 'block' | 'warn' })
                 }
               >
-                <option value="">default (warn)</option>
+                <option value="">default (block)</option>
                 <option value="block">block</option>
                 <option value="warn">warn</option>
               </select>

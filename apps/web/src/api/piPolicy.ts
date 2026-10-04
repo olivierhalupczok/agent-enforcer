@@ -85,6 +85,7 @@ export interface IdentitySection {
 
 export interface AgentPolicy {
   identity?: IdentitySection
+  blockedLinks?: CommandRule[]
   commands?: CommandSection
   files?: FileSection
   budget?: BudgetSection
@@ -136,6 +137,9 @@ export function usePiPolicy() {
   return useQuery({
     queryKey: piPolicyKeys.policy,
     queryFn: () => getJson<PiPolicyResponse>('/pi/policy'),
+    // the extension writes the policy file behind our back (auto-ban); never
+    // serve the 30s-stale cache on a revisit — always revalidate on mount
+    staleTime: 0,
   })
 }
 

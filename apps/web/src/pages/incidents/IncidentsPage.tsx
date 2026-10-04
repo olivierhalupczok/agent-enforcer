@@ -5,6 +5,25 @@ import { badgeClass, buttonPrimary, buttonSecondary } from '../../ui/classes'
 
 const card = 'flex flex-col gap-3 rounded-xl border border-line bg-surface p-5'
 
+const EVENT_LABELS: Record<string, string> = {
+  command_blocked: 'Command blocked',
+  file_blocked: 'File access blocked',
+  link_blocked: 'Link fetch blocked',
+  injection_detected: 'Prompt injection detected',
+  source_auto_banned: 'Source auto-banned',
+  approval_denied: 'Approval denied',
+  output_redacted: 'Command output redacted',
+  file_redacted: 'File content redacted',
+  budget_exceeded: 'Budget exceeded',
+  time_limit_exceeded: 'Time limit exceeded',
+}
+
+const MODE_BADGES: Record<string, { label: string; className: string }> = {
+  block: { label: 'Blocked', className: 'bg-[#FBE7E2] text-danger' },
+  warn: { label: 'Warned', className: 'bg-warn-bg text-warn-fg' },
+  redacted: { label: 'Redacted', className: 'bg-warn-bg text-warn-fg' },
+}
+
 export function IncidentsPage() {
   const query = useIncidents()
   const ban = useBanLink()
@@ -28,8 +47,9 @@ export function IncidentsPage() {
         <div className="mr-auto max-w-2xl">
           <h1 className="m-0 text-[28px] font-semibold tracking-tight">Incidents</h1>
           <p className="m-0 text-[13px] text-muted">
-            Prompt-injection detections recorded by the control layer extension while agents worked.
-            Sources get auto-banned; ban or unban links manually below.
+            Every negative policy event recorded by the control layer extension: blocked commands and
+            files, injection detections, auto-bans, redactions, denials and limit breaches. Injection
+            sources get auto-banned in the global config.
           </p>
         </div>
         <button type="button" className={buttonSecondary} onClick={() => void query.refetch()}>
@@ -57,11 +77,11 @@ export function IncidentsPage() {
       ) : query.data.length === 0 ? (
         <div className={card}>
           <p className="m-0 text-sm text-muted">
-            No incidents recorded yet. Run the{' '}
+            No incidents recorded yet. Run a{' '}
             <Link to="/playground" className="font-medium">
-              injection scenario on the Playground
+              scenario on the Playground
             </Link>{' '}
-            — a detection lands here (and auto-bans its source) the moment the agent touches it.
+            — any rule the agent trips lands here.
           </p>
         </div>
       ) : (
@@ -71,8 +91,8 @@ export function IncidentsPage() {
               key={`${incident.ts}-${i}`}
               incident={incident}
               busy={busy}
-              onBan={() => act((u) => ban.mutate(u), incident.url!)}
-              onUnban={() => act((u) => unban.mutate(u), incident.url!)}
+              onBan={incident.url ? () => act((u) => ban.mutate(u), incident.url!) : undefined}
+              onUnban={incident.url ? () => act((u) => unban.mutate(u), incident.url!) : undefined}
             />
           ))}
         </div>
@@ -89,30 +109,37 @@ function IncidentRow({
 }: {
   incident: import('../../api/playground').Incident
   busy: boolean
-  onBan: () => void
-  onUnban: () => void
+  onBan?: () => void
+  onUnban?: () => void
 }) {
-  const modeBadge =
-    incident.mode === 'block' ? 'bg-[#FBE7E2] text-danger' : 'bg-warn-bg text-warn-fg'
+  const mode = MODE_BADGES[incident.mode] ?? MODE_BADGES.block
+  const configLabel = incident.scope === 'defaults' ? 'Global config' : `Host: ${incident.scope}`
   return (
     <article aria-label={`Incident at ${incident.ts}`} className={card}>
       <div className="flex flex-wrap items-center gap-2">
-        <span className={`${badgeClass} ${modeBadge}`}>
-          {incident.mode === 'block' ? 'Blocked' : 'Warned'}
-        </span>
-        {incident.autoBanned && (
+        <span className={`${badgeClass} ${mode.className}`}>{mode.label}</span>
+        <span className="text-sm font-semibold">{EVENT_LABELS[incident.event] ?? incident.event}</span>
+        {incident.autoBanned && incident.event !== 'source_auto_banned' && (
           <span className={`${badgeClass} bg-[#FBE7E2] text-danger`}>Auto-banned</span>
         )}
-        <span className="font-mono text-xs text-muted">{incident.agent}</span>
-        <span className="text-xs text-muted">{new Date(incident.ts).toLocaleString()}</span>
+        <span className={`${badgeClass} bg-[#E6E9F5] text-[#2E3A6B]`}>{configLabel}</span>
+        {incident.tool && (
+          <span className={`${badgeClass} bg-[#F0F0EB] text-[#30343B]`}>{incident.tool}</span>
+        )}
+        <span className="ml-auto font-mono text-xs text-muted">{incident.agent}</span>
       </div>
-      <div className="flex flex-wrap gap-1.5">
-        {incident.hits.map((h) => (
-          <code key={h} className="rounded bg-canvas px-1.5 py-0.5 font-mono text-[12px]">
-            {h}
-          </code>
-        ))}
+      <div className="flex items-center gap-2 text-xs text-muted">
+        <span className="font-mono">{incident.ts.replace('T', ' ').slice(0, 19)}Z</span>
       </div>
+      {incident.hits.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {incident.hits.map((h) => (
+            <code key={h} className="rounded bg-canvas px-1.5 py-0.5 font-mono text-[12px]">
+              {h}
+            </code>
+          ))}
+        </div>
+      )}
       {incident.url && (
         <div className="flex flex-wrap items-center gap-2">
           <code className="min-w-0 truncate rounded bg-canvas px-1.5 py-0.5 font-mono text-[12px]">
@@ -130,7 +157,7 @@ function IncidentRow({
         </div>
       )}
       {incident.detail && (
-        <pre className="m-0 overflow-auto rounded bg-canvas p-2 font-mono text-[12px] whitespace-pre-wrap">
+        <pre className="m-0 max-h-40 overflow-auto rounded bg-canvas p-2 font-mono text-[12px] whitespace-pre-wrap">
           {incident.detail}
         </pre>
       )}
