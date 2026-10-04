@@ -119,7 +119,6 @@ export function PolicyPage() {
     <PageShell>
       <PageHeader
         title="Policies"
-        description="Prototype editor for the pi coding-agent control layer. Changes write directly to the repository policy file."
         meta={
           <span>
             {loaded ? (

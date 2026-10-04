@@ -62,7 +62,6 @@ export function PlaygroundPage() {
     <PageShell>
       <PageHeader
         title="Playground"
-        description="Prototype runner for predefined, sandboxed pi control-layer scenarios. Results demonstrate policy behavior and are not production evaluations."
         actions={
           <div className="flex w-full flex-wrap items-end gap-3 sm:w-auto">
             <label className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-none">

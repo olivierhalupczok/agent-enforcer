@@ -45,7 +45,6 @@ export function IncidentsPage() {
     <PageShell>
       <PageHeader
         title="Incidents"
-        description="Prototype event feed from the pi control-layer extension. Review blocks, redactions, denials, injection detections, and limit breaches."
         actions={
           <button type="button" className={buttonSecondary} disabled={query.isFetching} onClick={() => void query.refetch()}>
             Refresh
