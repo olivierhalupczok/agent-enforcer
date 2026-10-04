@@ -228,15 +228,21 @@ def _pi_command() -> list[str]:
 
 
 def _extension_path(repo_root: str) -> str:
-    """control-layer.ts: repo packages dir, or the vendored copy (Vercel build)."""
+    """control-layer extension: compiled .mjs first (jiti-free), else the .ts.
+
+    .ts extensions load through jiti, which the Vercel Python lambda prunes;
+    the .mjs build of the same file loads via plain import.
+    """
     candidates = (
+        Path(repo_root) / "packages" / "pi-control-layer" / "control-layer.mjs",
+        Path(repo_root) / "pi-control-layer" / "control-layer.mjs",  # vendored by build.sh
         Path(repo_root) / "packages" / "pi-control-layer" / "control-layer.ts",
         Path(repo_root) / "pi-control-layer" / "control-layer.ts",  # vendored by build.sh
     )
     for path in candidates:
         if path.is_file():
             return str(path)
-    raise PlaygroundError("control-layer.ts not found in the repo.")
+    raise PlaygroundError("control-layer extension not found in the repo.")
 
 
 def run_scenario(request: RunRequest) -> RunResult:

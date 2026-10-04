@@ -88,8 +88,7 @@ if [ -x api/_pi/node ]; then
   ANTHROPIC_API_KEY=dummy api/_pi/node api/_pi/pi-coding-agent/dist/bundle/cli.js --provider anthropic --model claude-sonnet-4-5 --version >/dev/null 2>&1 \
     && echo "    vendored single-file pi runs OK" || echo "    WARNING: vendored pi did not run"
 fi
-rm -rf node_modules package-lock.json
-echo "    node_modules after trim: $(du -sh node_modules 2>/dev/null | cut -f1 || echo 'gone')"
+echo "    node_modules after trim: kept (needed for the extension compile below)"
 
 echo "==> [3/3] vendor pi-control-layer files"
 # locate the package either as repo sibling (repo layout) or already vendored
@@ -100,8 +99,13 @@ done
 if [ -z "$SRC" ]; then echo "    ERROR: control-layer.ts not found in any candidate location"; ls -la; exit 1; fi
 echo "    source: $SRC"
 mkdir -p pi-control-layer
-cp "$SRC/control-layer.ts" pi-control-layer/
 cp "$SRC/policy.schema.json" pi-control-layer/
 cp "$SRC/policy.json.example" pi-control-layer/
+# compile the extension to .mjs: pi loads .ts via jiti (pruned from the lambda)
+# but .mjs via plain import — no jiti needed
+"$ESBUILD" "$SRC/control-layer.ts" --bundle --platform=node --format=esm \
+  --outfile=pi-control-layer/control-layer.mjs 2>&1 | tail -1
 ls pi-control-layer/
+# node_modules is only build tooling — remove it AFTER the extension compile
+rm -rf node_modules package-lock.json
 echo "==> build.sh complete"
