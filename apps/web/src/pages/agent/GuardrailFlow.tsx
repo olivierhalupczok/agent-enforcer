@@ -8,11 +8,10 @@ const SOURCE_LABELS: Record<EffectiveGuardrail['source'], string> = {
   user: 'User',
 }
 
-// Left edge and badge per action, so a blocking check stands out in the flow.
-const ACTION_STYLES: Record<GuardrailAction, { edge: string; badge: string }> = {
-  block: { edge: 'border-l-danger', badge: 'bg-[#F7E3DF] text-danger' },
-  redact: { edge: 'border-l-teal', badge: 'bg-teal-soft text-teal-dark' },
-  warn: { edge: 'border-l-amber', badge: 'bg-warn-bg text-warn-fg' },
+const ACTION_STYLES: Record<GuardrailAction, { border: string; badge: string }> = {
+  block: { border: 'border-danger/30', badge: 'bg-[#F7E3DF] text-danger' },
+  redact: { border: 'border-teal/30', badge: 'bg-teal-soft text-teal-dark' },
+  warn: { border: 'border-amber/40', badge: 'bg-warn-bg text-warn-fg' },
 }
 
 /** → between steps on wide screens, ↓ when the flow stacks on narrow ones. */
@@ -52,14 +51,14 @@ function Stage({ label, entries }: { label: string; entries: EffectiveGuardrail[
     <div className="flex min-w-0 flex-1 flex-col gap-2 rounded-xl border border-dashed border-line-strong p-3">
       <h4 className="m-0 text-xs font-semibold tracking-[0.04em] text-muted uppercase">{label}</h4>
       <ol aria-label={label} className="m-0 flex list-none flex-col p-0">
-          {entries.map((e, index) => {
-            const style = ACTION_STYLES[e.guardrail.action]
-            return (
-              <li key={e.guardrail.id} className="flex flex-col items-stretch">
-                {index > 0 && <Arrow down />}
-                <div
-                  className={`flex items-start gap-2.5 rounded-lg border border-l-4 border-line bg-surface px-3 py-2 ${style.edge}`}
-                >
+        {entries.map((e, index) => {
+          const style = ACTION_STYLES[e.guardrail.action]
+          return (
+            <li key={e.guardrail.id} className="flex flex-col items-stretch">
+              {index > 0 && <Arrow down />}
+              <div
+                className={`flex items-start gap-2.5 rounded-lg border bg-surface px-3 py-2 ${style.border}`}
+              >
                   <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-canvas text-xs font-semibold text-muted">
                     {index + 1}
                   </span>
@@ -77,10 +76,10 @@ function Stage({ label, entries }: { label: string; entries: EffectiveGuardrail[
                       </span>
                     </span>
                   </span>
-                </div>
-              </li>
-            )
-          })}
+              </div>
+            </li>
+          )
+        })}
       </ol>
       {entries.length === 0 && <p className="m-0 text-sm text-muted">Nothing runs here.</p>}
     </div>

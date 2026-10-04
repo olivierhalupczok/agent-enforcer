@@ -3,6 +3,7 @@ import type {
   BudgetSection,
   CommandRule,
   ControlPlaneSection,
+  IdentitySection,
   InjectionSection,
   SystemPromptSection,
   TimeSection,
@@ -49,7 +50,7 @@ export function AgentPolicyEditor({ value, disabled, onChange, headerActions }: 
           className={numInput}
           type="number"
           step={step}
-          min={0}
+          min={section === 'time' ? 1 : 0}
           disabled={disabled}
           value={(v[key] as number | undefined) ?? ''}
           onChange={(e) => {
@@ -87,6 +88,22 @@ export function AgentPolicyEditor({ value, disabled, onChange, headerActions }: 
   return (
     <div className="flex flex-col gap-4">
       {headerActions && <div className="flex justify-end">{headerActions}</div>}
+
+      <fieldset className="m-0 rounded-lg border border-line bg-canvas/60 p-3">
+        <legend className="px-1 text-[13px] font-semibold">{sectionLabel('identity')}</legend>
+        <label className="flex max-w-md flex-col gap-1">
+          <span className={labelClass}>Owner</span>
+          <input
+            className={inputClass}
+            disabled={disabled}
+            value={value.identity?.owner ?? ''}
+            placeholder="team or operator"
+            onChange={(e) =>
+              set('identity', e.target.value ? ({ owner: e.target.value } as IdentitySection) : undefined)
+            }
+          />
+        </label>
+      </fieldset>
 
       {/* commands */}
       <fieldset className="m-0 rounded-lg border border-line bg-canvas/60 p-3">
@@ -151,7 +168,7 @@ export function AgentPolicyEditor({ value, disabled, onChange, headerActions }: 
         {/* budget */}
         <fieldset className="m-0 rounded-lg border border-line bg-canvas/60 p-3">
           <legend className="px-1 text-[13px] font-semibold">{sectionLabel('budget')}</legend>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             {numberField('budget', 'maxSessionCostUsd', 'Max session cost (USD)', '0.01')}
             {numberField('budget', 'maxTurnCostUsd', 'Max turn cost (USD)', '0.01')}
             {numberField('budget', 'maxSessionTokens', 'Max session tokens')}
@@ -163,7 +180,7 @@ export function AgentPolicyEditor({ value, disabled, onChange, headerActions }: 
         {/* time */}
         <fieldset className="m-0 rounded-lg border border-line bg-canvas/60 p-3">
           <legend className="px-1 text-[13px] font-semibold">{sectionLabel('time')}</legend>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             {numberField('time', 'maxTurnSeconds', 'Max turn seconds')}
             {numberField('time', 'maxSessionSeconds', 'Max session seconds')}
             {numberField('time', 'alertAfterSeconds', 'Alert after (s)')}
@@ -257,7 +274,7 @@ export function AgentPolicyEditor({ value, disabled, onChange, headerActions }: 
                   set('injection', { ...(value.injection ?? {}), onDetect: e.target.value as 'block' | 'warn' })
                 }
               >
-                <option value="">default (block)</option>
+                <option value="">default (warn)</option>
                 <option value="block">block</option>
                 <option value="warn">warn</option>
               </select>

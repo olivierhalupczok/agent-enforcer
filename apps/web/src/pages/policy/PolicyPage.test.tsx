@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { apiPath } from '../../api/client'
 import { fakePiPolicy } from '../../test/fakePiPolicy'
 import { renderApp } from '../../test/renderApp'
@@ -19,7 +19,7 @@ describe('PolicyPage', () => {
     renderApp('/policies', undefined, { mode: 'agent' })
     expect(await screen.findByRole('heading', { name: 'Global rules' })).toBeInTheDocument()
     expect(screen.getByText('applied to every agent')).toBeInTheDocument()
-    expect(screen.getByText('overrides the global rules for this agent')).toBeInTheDocument()
+    expect(screen.getByText(/sections replace their global counterparts/i)).toBeInTheDocument()
     expect(screen.getByText('amir')).toBeInTheDocument()
 
     const defaults = screen.getByRole('region', { name: 'Global rules' })
@@ -42,10 +42,10 @@ describe('PolicyPage', () => {
     await user.click(screen.getByRole('button', { name: 'Add rule' }))
 
     expect(within(defaults).getByText('ban-fork-bomb')).toBeInTheDocument()
-    expect(screen.getByText('Unsaved changes — remember to save.')).toBeInTheDocument()
+    expect(screen.getByText('Unsaved changes. Save before leaving this page.')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('✓ Saved'))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved'))
     const rules = fakePiPolicy.policy.defaults?.commands?.banned ?? []
     expect(rules.some((r) => r.id === 'ban-fork-bomb' && r.reason === 'Fork bomb')).toBe(true)
   })
@@ -120,6 +120,7 @@ describe('PolicyPage', () => {
 
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent(/changed on disk since you loaded it/i)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
     await user.click(within(alert).getByRole('button', { name: 'Reload now' }))
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
   })
@@ -133,10 +134,10 @@ describe('PolicyPage', () => {
 
     await user.click(within(row).getByRole('button', { name: 'Enabled' }))
     expect(within(row).getByRole('button', { name: 'Disabled' })).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.getByText('Unsaved changes — remember to save.')).toBeInTheDocument()
+    expect(screen.getByText('Unsaved changes. Save before leaving this page.')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('✓ Saved'))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved'))
     const rule = (fakePiPolicy.policy.defaults?.commands?.banned ?? []).find((r) => r.id === 'ban-rm-rf')
     expect(rule?.enabled).toBe(false)
   })
@@ -147,8 +148,12 @@ describe('PolicyPage', () => {
     await screen.findByRole('region', { name: 'amir' })
 
     await user.click(screen.getByRole('button', { name: 'Remove override' }))
-    expect(screen.getByRole('button', { name: 'Confirm remove' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Confirm remove' }))
+    expect(screen.getByRole('button', { name: 'Confirm remove amir' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByRole('region', { name: 'amir' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Remove override' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm remove amir' }))
 
     await waitFor(() => expect(screen.queryByRole('region', { name: 'amir' })).not.toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
@@ -163,5 +168,32 @@ describe('PolicyPage', () => {
     await user.click(screen.getByRole('button', { name: 'Add override' }))
     expect(screen.getByRole('region', { name: 'new-host' })).toBeInTheDocument()
     expect(fakePiPolicy.policy.agents?.['new-host']).toBeUndefined() // not saved yet
+  })
+
+  it('edits owner, shows schema defaults, and enforces time minimums', async () => {
+    const user = userEvent.setup()
+    renderApp('/policies', undefined, { mode: 'agent' })
+    const defaults = await screen.findByRole('region', { name: 'Global rules' })
+
+    await user.type(within(defaults).getByLabelText('Owner'), 'security-platform')
+    expect(within(defaults).getByLabelText('Owner')).toHaveValue('security-platform')
+    expect(within(defaults).getByRole('option', { name: 'default (warn)' })).toBeInTheDocument()
+    expect(within(defaults).getByLabelText('Max turn seconds')).toHaveAttribute('min', '1')
+    expect(within(defaults).getAllByText('No rules in this list.').length).toBeGreaterThan(0)
+  })
+
+  it('protects a dirty draft from reload and browser unload', async () => {
+    const user = userEvent.setup()
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    renderApp('/policies', undefined, { mode: 'agent' })
+    const defaults = await screen.findByRole('region', { name: 'Global rules' })
+    await user.type(within(defaults).getByLabelText('Owner'), 'ops')
+
+    const beforeUnload = new Event('beforeunload', { cancelable: true })
+    expect(window.dispatchEvent(beforeUnload)).toBe(false)
+    await user.click(screen.getByRole('button', { name: 'Reload' }))
+
+    expect(confirm).toHaveBeenCalledWith('Reload and discard your unsaved policy changes?')
+    expect(within(defaults).getByLabelText('Owner')).toHaveValue('ops')
   })
 })

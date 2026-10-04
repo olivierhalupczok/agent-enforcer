@@ -129,6 +129,33 @@ describe('Security scan', () => {
     expect(screen.getByText('Instruction hidden in a document')).toBeInTheDocument()
   })
 
+  it('shows scan history errors with a retry', async () => {
+    server.use(
+      http.get(apiPath(`/agents/${AGENT}/security-scans`), () =>
+        HttpResponse.json({ detail: 'History unavailable' }, { status: 503 }),
+      ),
+    )
+    await open()
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent("Couldn't load scan history.")
+    expect(within(alert).getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+  })
+
+  it('shows saved scan errors with a retry', async () => {
+    saved = [scan]
+    server.use(
+      http.get(apiPath('/security-scans/scan-1'), () =>
+        HttpResponse.json({ detail: 'Saved scan unavailable' }, { status: 503 }),
+      ),
+    )
+    const user = await open()
+    const history = within(await screen.findByRole('region', { name: 'Past scans' }))
+    await user.click(history.getByRole('button', { name: /2 → 1 of 2 attacks worked/ }))
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent("Couldn't load saved scan.")
+    expect(within(alert).getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+  })
+
   it('shows a failed scan', async () => {
     server.use(
       http.post(apiPath(`/agents/${AGENT}/security-scans`), () =>

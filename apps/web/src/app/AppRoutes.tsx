@@ -21,7 +21,7 @@ import { useMode } from './mode'
 import { useRole } from './role'
 
 // Screens that exist; every other nav item renders its placeholder.
-const PAGES: Partial<Record<string, ReactElement>> = {
+const PAGES: Record<string, ReactElement> = {
   '/agents': <AgentsPage />,
   '/audit': <AuditLogPage />,
   '/guardrails': <GuardrailsPage />,
@@ -53,7 +53,7 @@ export function AppRoutes() {
           <Route
             key={item.path}
             path={item.path}
-            element={PAGES[item.path] ?? <Placeholder title={item.title} issue={item.issue} />}
+            element={PAGES[item.path]}
           />
         ))}
         {mode === 'agent' ? (

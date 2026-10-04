@@ -59,7 +59,7 @@ export function RuleList({ spec, showTimeout, rules, disabled, onChange }: RuleL
       </div>
 
       {list.length === 0 && editingIndex === null && (
-        <p className="m-0 py-1 text-xs text-muted italic">None — inherits the defaults.</p>
+        <p className="m-0 py-1 text-xs text-muted italic">No rules in this list.</p>
       )}
 
       <ul className="m-0 flex list-none flex-col gap-2 p-0">

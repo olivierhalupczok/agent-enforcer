@@ -4,6 +4,8 @@ import type { Reply, Verdict } from '../../api/a2a'
 import { useAgents } from '../../api/agents'
 import { newContextId, useSendTestMessage } from '../../api/testChat'
 import { badgeClass, buttonPrimary, buttonSecondary, inputClass } from '../../ui/classes'
+import { EmptyState, LoadingRows, PageHeader, PageShell } from '../../ui/Page'
+import { LoadError } from '../ApiUnavailable'
 import { FlagReply } from './FlagReply'
 import { TracePanel } from './TracePanel'
 
@@ -41,10 +43,16 @@ export function TestChatPage() {
   const sendMessage = useSendTestMessage(agentId)
   const currentContext = useRef(contextId)
   const turnCounter = useRef(0)
+  const conversationRef = useRef<HTMLOListElement>(null)
 
   useEffect(() => {
     currentContext.current = contextId
   }, [contextId])
+
+  useEffect(() => {
+    const conversation = conversationRef.current
+    if (conversation) conversation.scrollTop = conversation.scrollHeight
+  }, [turns])
 
   const pending = turns.some((t) => t.status === 'pending')
   const canSend = Boolean(agentId) && !pending
@@ -78,6 +86,7 @@ export function TestChatPage() {
     setContextId(next)
     setTurns([])
     setSelectedTurnId(null)
+    setShowTrace(false)
   }
 
   const submit = (event?: FormEvent) => {
@@ -89,7 +98,7 @@ export function TestChatPage() {
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault()
       submit()
     }
@@ -109,61 +118,64 @@ export function TestChatPage() {
   const selected = turns.find((t) => t.id === selectedTurnId && t.reply) ?? finished[finished.length - 1] ?? null
 
   return (
-    <section className="flex flex-col gap-6">
-      <header className="flex flex-col gap-1.5">
-        <h1 className="m-0 text-[28px] font-semibold tracking-tight">Test chat</h1>
-        <p className="m-0 text-[15px] text-muted">Talk to an agent through the hub's guardrails.</p>
-      </header>
+    <PageShell>
+      <PageHeader title="Test chat" description="Talk to an agent through the hub's guardrails." />
 
       {agents.isPending ? (
-        <p className="m-0 text-sm text-muted">Loading agents…</p>
+        <LoadingRows label="Loading agents" count={2} />
       ) : agents.isError ? (
-        <p role="alert" className="m-0 text-sm">
-          Couldn't load agents.
-        </p>
+        <LoadError what="agents" error={agents.error} onRetry={() => void agents.refetch()} />
       ) : agents.data.length === 0 ? (
-        <p className="m-0 text-sm">
-          Register an agent first.{' '}
-          <Link to="/agents" className="font-semibold">
-            Go to Agents
-          </Link>
-        </p>
+        <EmptyState
+          title="Register an agent first."
+          description="Test chat needs a registered agent."
+          action={<Link to="/agents" className="text-sm font-semibold underline decoration-teal/30 underline-offset-4">Go to Agents</Link>}
+        />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="grid min-h-0 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="flex min-w-0 flex-col gap-4">
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="flex min-w-60 flex-col gap-1.5">
-                <label htmlFor="chat-agent" className="text-[13px] font-semibold text-[#30343B]">
-                  Agent
-                </label>
-                <select
-                  id="chat-agent"
-                  value={agentId}
-                  onChange={(e) => {
-                    setPickedAgentId(e.target.value)
-                    reset()
-                  }}
-                  className={inputClass}
-                >
-                  {agents.data.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
+            <section aria-labelledby="chat-setup-heading" className="rounded-xl border border-line bg-surface p-4 sm:p-5">
+              <div className="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <h2 id="chat-setup-heading" className="m-0 text-sm font-semibold">Conversation setup</h2>
+                  <p className="mt-1 mb-0 text-xs text-muted">Choose the guarded agent used for this chat.</p>
+                </div>
+                <div className="flex w-full flex-wrap items-end gap-3 sm:w-auto">
+                  <div className="flex min-w-60 flex-1 flex-col gap-1.5 sm:flex-none">
+                    <label htmlFor="chat-agent" className="text-[13px] font-semibold text-[#30343B]">
+                      Agent
+                    </label>
+                    <select
+                      id="chat-agent"
+                      value={agentId}
+                      onChange={(e) => {
+                        setPickedAgentId(e.target.value)
+                        reset()
+                      }}
+                      className={inputClass}
+                    >
+                      {agents.data.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button type="button" className={buttonSecondary} onClick={reset}>
+                    New chat
+                  </button>
+                </div>
               </div>
-              <button type="button" className={buttonSecondary} onClick={reset}>
-                New chat
-              </button>
-            </div>
+            </section>
 
             {simulating && (
               <p className="m-0 rounded-lg bg-warn-bg p-3 text-sm text-warn-fg">{SIMULATED}</p>
             )}
 
             <ol
+              ref={conversationRef}
               aria-label="Conversation"
-              className="m-0 flex min-h-48 list-none flex-col gap-3 rounded-xl border border-line bg-surface p-4"
+              className="m-0 flex min-h-64 max-h-[min(34rem,55vh)] list-none flex-col gap-3 overflow-y-auto rounded-xl border border-line bg-surface p-4 overscroll-contain scroll-smooth"
             >
               {turns.length === 0 && (
                 <li className="text-sm text-muted">Send a message or pick a scenario below.</li>
@@ -174,7 +186,10 @@ export function TestChatPage() {
                   turn={turn}
                   number={index + 1}
                   selected={selected?.id === turn.id}
-                  onSelect={() => setSelectedTurnId(turn.id)}
+                  onSelect={() => {
+                    setSelectedTurnId(turn.id)
+                    setShowTrace(true)
+                  }}
                   onRetry={() => send(turn.userText, turn)}
                   retryDisabled={!canSend}
                   agentId={agentId}
@@ -233,7 +248,7 @@ export function TestChatPage() {
           </div>
         </div>
       )}
-    </section>
+    </PageShell>
   )
 }
 

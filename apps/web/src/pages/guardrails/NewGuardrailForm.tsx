@@ -62,7 +62,7 @@ function Field({ id, label, error, children }: { id: string; label: string; erro
 
 export function NewGuardrailForm({ templates, onClose, onCreated }: NewGuardrailFormProps) {
   const [engine, setEngine] = useState<Engine | null>(null)
-  const [templateId, setTemplateId] = useState<TemplateId | null>(null) // null = "None"
+  const [templateId, setTemplateId] = useState<TemplateId | null>(null) // null uses the engine's default template.
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [stage, setStage] = useState<StageChoice>('input')
@@ -91,6 +91,7 @@ export function NewGuardrailForm({ templates, onClose, onCreated }: NewGuardrail
   const engineInfo = ENGINES.find((e) => e.id === engine)
   const effectiveTemplate: TemplateId | null = templateId ?? engineInfo?.defaultTemplate ?? null
   const template = templates.find((t) => t.id === effectiveTemplate)
+  const defaultTemplate = templates.find((t) => t.id === engineInfo?.defaultTemplate)
   const allowedActions: GuardrailAction[] = template?.actions ?? ['block', 'redact', 'warn']
   const effectiveAction = allowedActions.includes(action) ? action : allowedActions[0]
   const engineTemplates = engine ? templates.filter((t) => t.engines.includes(engine)) : []
@@ -231,7 +232,7 @@ export function NewGuardrailForm({ templates, onClose, onCreated }: NewGuardrail
           2 · Start from a template
         </span>
         <div role="group" aria-label="Template" className="flex flex-wrap gap-2">
-          {[{ id: null, label: 'None' } as const, ...engineTemplates].map((t) => {
+          {[{ id: null, label: defaultTemplate ? `Engine default (${defaultTemplate.label})` : 'Engine default' } as const, ...engineTemplates].map((t) => {
             const on = templateId === t.id
             return (
               <button
@@ -466,7 +467,7 @@ export function NewGuardrailForm({ templates, onClose, onCreated }: NewGuardrail
         </p>
       )}
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col-reverse gap-3 border-t border-line pt-5 sm:flex-row sm:items-center">
         <button
           type="button"
           className={buttonSecondary}
@@ -475,12 +476,12 @@ export function NewGuardrailForm({ templates, onClose, onCreated }: NewGuardrail
         >
           {dryRunning ? 'Running…' : 'Dry run'}
         </button>
-        <span className="ml-auto flex gap-3">
-          <button type="button" className={buttonSecondary} onClick={onClose}>
+        <span className="flex gap-3 sm:ml-auto">
+          <button type="button" className={`${buttonSecondary} flex-1 sm:flex-none`} disabled={create.isPending} onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className={buttonPrimary} disabled={create.isPending}>
-            Save guardrail
+          <button type="submit" className={`${buttonPrimary} flex-1 sm:flex-none`} disabled={create.isPending}>
+            {create.isPending ? 'Saving…' : 'Save guardrail'}
           </button>
         </span>
       </div>

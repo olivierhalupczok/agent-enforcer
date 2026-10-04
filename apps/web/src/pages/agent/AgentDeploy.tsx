@@ -33,6 +33,7 @@ function curlExample(url: string, key: string): string {
 export function AgentDeploy({ agent }: { agent: Agent }) {
   const createKey = useCreateGatewayKey(agent.id)
   const [status, setStatus] = useState('')
+  const [confirming, setConfirming] = useState(false)
   const created = createKey.data
   const urls = gatewayUrls(agent.id, created)
   const key = created?.key ?? KEY_PLACEHOLDER
@@ -47,6 +48,7 @@ export function AgentDeploy({ agent }: { agent: Agent }) {
   }
 
   const create = () => {
+    setConfirming(false)
     setStatus('')
     createKey.mutate(undefined, {
       onSuccess: () => setStatus('Gateway key created. Store it now, it won’t be shown again.'),
@@ -67,9 +69,11 @@ export function AgentDeploy({ agent }: { agent: Agent }) {
           the <code>X-API-Key</code> header.
         </p>
       </div>
-      <p role="status" className="sr-only">
-        {status}
-      </p>
+      {status && (
+        <p role="status" className="m-0 rounded-lg bg-teal-soft px-3 py-2 text-sm text-teal-dark">
+          {status}
+        </p>
+      )}
 
       <dl className="m-0 flex flex-col gap-3">
         <CopyField label="Guarded URL" value={urls.gateway} onCopy={copy} />
@@ -95,16 +99,28 @@ export function AgentDeploy({ agent }: { agent: Agent }) {
             {createKey.error.message}
           </p>
         )}
-        <div>
-          <button
-            type="button"
-            className={created ? buttonSecondary : buttonPrimary}
-            disabled={createKey.isPending}
-            onClick={create}
-          >
-            {createKey.isPending ? 'Creating…' : created ? 'Create another key' : 'Create key'}
-          </button>
-        </div>
+        {confirming ? (
+          <div role="group" aria-label="Confirm gateway key replacement" className="flex flex-col items-start gap-3 rounded-lg border border-amber/40 bg-warn-bg p-3 text-warn-fg sm:flex-row sm:items-center sm:justify-between">
+            <p className="m-0 text-sm font-semibold">Creating a key replaces the previous one; callers using it stop working.</p>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <button type="button" className={buttonSecondary} onClick={() => setConfirming(false)}>Cancel</button>
+              <button type="button" className={buttonPrimary} disabled={createKey.isPending} onClick={create}>
+                {createKey.isPending ? 'Creating…' : 'Create another key'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <button
+              type="button"
+              className={created ? buttonSecondary : buttonPrimary}
+              disabled={createKey.isPending}
+              onClick={created ? () => setConfirming(true) : create}
+            >
+              {createKey.isPending ? 'Creating…' : created ? 'Create another key' : 'Create key'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-2">
@@ -122,7 +138,7 @@ export function AgentDeploy({ agent }: { agent: Agent }) {
         </div>
         <pre
           aria-labelledby="agent-deploy-example"
-          className="m-0 overflow-x-auto rounded-lg bg-canvas p-3 font-mono text-xs"
+          className="m-0 max-w-full overflow-x-auto rounded-lg bg-canvas p-3 font-mono text-xs whitespace-pre"
         >
           {curlExample(urls.gateway, key)}
         </pre>
@@ -141,12 +157,12 @@ function CopyField({ label, value, onCopy }: CopyFieldProps) {
   return (
     <div className="flex flex-col gap-1">
       <dt className="text-[13px] font-semibold text-[#30343B]">{label}</dt>
-      <dd className="m-0 flex flex-wrap items-center gap-2">
-        <code className="min-w-0 rounded-md bg-canvas px-2 py-1 text-xs break-all">{value}</code>
+      <dd className="m-0 flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+        <code className="min-w-0 flex-1 overflow-x-auto rounded-md bg-canvas px-2 py-1 text-xs whitespace-nowrap">{value}</code>
         <button
           type="button"
           aria-label={`Copy ${label.toLowerCase()}`}
-          className={`${buttonSecondary} min-h-9 px-3 text-xs`}
+          className={`${buttonSecondary} min-h-9 self-start px-3 text-xs sm:self-auto`}
           onClick={() => void onCopy(label, value)}
         >
           Copy

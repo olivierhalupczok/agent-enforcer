@@ -119,9 +119,12 @@ export function AgentGuardrails({ agent }: { agent: Agent }) {
       </p>
 
       {guardrails.isError ? (
-        <p role="alert" className="m-0 text-sm">
-          Couldn't load guardrails.
-        </p>
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-canvas p-3">
+          <p className="m-0 text-sm">Couldn't load guardrails.</p>
+          <button type="button" className={small} onClick={() => void guardrails.refetch()}>
+            Retry
+          </button>
+        </div>
       ) : guardrails.isPending ? (
         <p className="m-0 text-sm text-muted">Loading guardrails…</p>
       ) : (
@@ -149,9 +152,12 @@ export function AgentGuardrails({ agent }: { agent: Agent }) {
           {unsupported ? (
             <p className="m-0 text-sm text-muted">{ATTACH_UNAVAILABLE}</p>
           ) : bindings.isError ? (
-            <p role="alert" className="m-0 text-sm">
-              Couldn't load this agent's guardrails.
-            </p>
+            <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-canvas p-3">
+              <p className="m-0 text-sm">Couldn't load this agent's guardrails.</p>
+              <button type="button" className={small} onClick={() => void bindings.refetch()}>
+                Retry
+              </button>
+            </div>
           ) : bindings.isPending ? (
             <p className="m-0 text-sm text-muted">Loading attached guardrails…</p>
           ) : (
@@ -265,10 +271,21 @@ export function AgentGuardrails({ agent }: { agent: Agent }) {
             </div>
           )}
 
-          {effective.data && (
+          {!unsupported && (
             <div className="flex flex-col gap-3 border-t border-line pt-4">
               <h3 className={sub}>Runs in this order</h3>
-              <GuardrailFlow agentName={agent.name} input={effective.data.input} output={effective.data.output} />
+              {effective.isPending ? (
+                <p className="m-0 text-sm text-muted">Loading effective guardrails…</p>
+              ) : effective.isError ? (
+                <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-canvas p-3">
+                  <p className="m-0 text-sm">Couldn't load effective guardrails.</p>
+                  <button type="button" className={small} onClick={() => void effective.refetch()}>
+                    Retry
+                  </button>
+                </div>
+              ) : (
+                <GuardrailFlow agentName={agent.name} input={effective.data.input} output={effective.data.output} />
+              )}
             </div>
           )}
         </>

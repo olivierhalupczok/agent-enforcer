@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { useBanLink, useIncidents, useUnbanLink } from '../../api/playground'
 import { badgeClass, buttonPrimary, buttonSecondary } from '../../ui/classes'
+import { EmptyState, LoadingRows, PageHeader, PageShell } from '../../ui/Page'
 
 const card = 'flex flex-col gap-3 rounded-xl border border-line bg-surface p-5'
 
@@ -30,60 +31,58 @@ export function IncidentsPage() {
   const unban = useUnbanLink()
   const [actionError, setActionError] = useState<string | null>(null)
 
-  const act = (fn: (url: string) => void, url: string) => {
+  const act = (kind: 'ban' | 'unban', url: string) => {
     setActionError(null)
-    fn(url)
+    const mutation = kind === 'ban' ? ban : unban
+    mutation.mutate(url, {
+      onError: (error) => setActionError((error as { message?: string }).message ?? `Couldn't ${kind} this link.`),
+    })
   }
-
-  const banError = (ban.error ?? unban.error) as { message?: string } | null
-  const currentError = banError?.message ?? null
-  if (banError && actionError !== currentError) setActionError(currentError)
 
   const busy = ban.isPending || unban.isPending
 
   return (
-    <section className="flex flex-col gap-5">
-      <header className="flex flex-wrap items-center gap-x-6 gap-y-2">
-        <div className="mr-auto max-w-2xl">
-          <h1 className="m-0 text-[28px] font-semibold tracking-tight">Incidents</h1>
-          <p className="m-0 text-[13px] text-muted">
-            Every negative policy event recorded by the control layer extension: blocked commands and
-            files, injection detections, auto-bans, redactions, denials and limit breaches. Injection
-            sources get auto-banned in the global config.
-          </p>
-        </div>
-        <button type="button" className={buttonSecondary} onClick={() => void query.refetch()}>
-          Refresh
-        </button>
-      </header>
+    <PageShell>
+      <PageHeader
+        title="Incidents"
+        description="Prototype event feed from the pi control-layer extension. Review blocks, redactions, denials, injection detections, and limit breaches."
+        actions={
+          <button type="button" className={buttonSecondary} disabled={query.isFetching} onClick={() => void query.refetch()}>
+            Refresh
+          </button>
+        }
+      />
 
-      {(actionError || query.isError) && (
+      {query.isError && (
         <div role="alert" className="rounded-lg border border-[#EFC4BC] bg-[#FBEAE6] p-3 text-sm text-danger">
-          {actionError ?? "Couldn't load incidents — is the API running?"}
-          {query.isError && (
-            <button type="button" className={`${buttonSecondary} ml-3`} onClick={() => void query.refetch()}>
-              Retry
-            </button>
-          )}
+          Couldn't load incidents. Check that the API is running.
+          <button type="button" className={`${buttonSecondary} ml-3`} onClick={() => void query.refetch()}>
+            Retry
+          </button>
         </div>
       )}
 
-      {!query.isSuccess ? (
-        <div aria-busy="true" className="flex flex-col gap-3">
-          {[0, 1].map((i) => (
-            <div key={i} className="h-24 animate-pulse rounded-xl border border-line bg-surface" />
-          ))}
+      {actionError && (
+        <div role="alert" className="rounded-lg border border-[#EFC4BC] bg-[#FBEAE6] p-3 text-sm text-danger">
+          {actionError}
         </div>
-      ) : query.data.length === 0 ? (
-        <div className={card}>
-          <p className="m-0 text-sm text-muted">
-            No incidents recorded yet. Run a{' '}
-            <Link to="/playground" className="font-medium">
-              scenario on the Playground
-            </Link>{' '}
-            — any rule the agent trips lands here.
-          </p>
-        </div>
+      )}
+
+      {query.isPending ? (
+        <LoadingRows label="Loading incidents" count={3} />
+      ) : !query.data ? null : query.data.length === 0 ? (
+        <EmptyState
+          title="No incidents recorded"
+          description={
+            <>
+              Run a{' '}
+              <Link to="/playground" className="font-medium">
+                scenario on the Playground
+              </Link>{' '}
+              to generate a policy event for this prototype feed.
+            </>
+          }
+        />
       ) : (
         <div className="flex flex-col gap-3">
           {query.data.map((incident, i) => (
@@ -91,13 +90,13 @@ export function IncidentsPage() {
               key={`${incident.ts}-${i}`}
               incident={incident}
               busy={busy}
-              onBan={incident.url ? () => act((u) => ban.mutate(u), incident.url!) : undefined}
-              onUnban={incident.url ? () => act((u) => unban.mutate(u), incident.url!) : undefined}
+              onBan={incident.url ? () => act('ban', incident.url!) : undefined}
+              onUnban={incident.url ? () => act('unban', incident.url!) : undefined}
             />
           ))}
         </div>
       )}
-    </section>
+    </PageShell>
   )
 }
 

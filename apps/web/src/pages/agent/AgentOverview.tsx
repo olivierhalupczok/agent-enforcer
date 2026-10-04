@@ -11,9 +11,9 @@ export function AgentOverview({ agent }: { agent: Agent }) {
         <dt className={term}>Description</dt>
         <dd className={value}>{agent.description || '—'}</dd>
         <dt className={term}>Agent URL</dt>
-        <dd className={`${value} font-mono text-[13px] break-all`}>{agent.base_url}</dd>
+        <dd className={`${value} min-w-0 overflow-x-auto font-mono text-[13px] whitespace-nowrap`}>{agent.base_url}</dd>
         <dt className={term}>A2A endpoint</dt>
-        <dd className={`${value} font-mono text-[13px] break-all`}>{agent.upstream_url}</dd>
+        <dd className={`${value} min-w-0 overflow-x-auto font-mono text-[13px] whitespace-nowrap`}>{agent.upstream_url}</dd>
         <dt className={term}>Agent Card</dt>
         <dd className={value}>
           {agent.agent_card ? (
