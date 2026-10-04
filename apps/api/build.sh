@@ -3,10 +3,8 @@
 # 1. Export uv.lock to requirements.txt (the Vercel Python runtime installs
 #    requirements.txt natively). uv may not exist on the build image; if the
 #    export cannot run, fall back to the committed requirements.txt.
-# 2. Install the pi coding agent (npm) into a trimmed node_modules so the
-#    playground runner can spawn it from a serverless function:
-#    - 250MB lambda limit: drop esbuild (284MB, build tooling only) + typescript
-#    - runtime deps stay: cli.js + provider SDKs (~167MB)
+# 2. Bundle pi and vendor its dynamic runtime dependencies outside node_modules
+#    (Vercel's Python builder prunes that directory).
 # 3. Vendor the control-layer extension, schema and seed policy into the
 #    project dir (works with repo layout and standalone uploads).
 set -euo pipefail
@@ -48,7 +46,7 @@ echo "    node_modules (pre-trim): $(du -sh node_modules 2>/dev/null | cut -f1 |
 echo "==> [2b] vendor pi (single-file bundle) + node binary into api/_pi/"
 # Vercel's Python builder prunes nested node_modules/ dirs even when listed in
 # includeFiles, so the package must be self-contained: esbuild-inlines
-# @earendil-works/chord + typebox into dist/bundle/cli.js itself. No node_modules.
+# @earendil-works/chord + typebox into dist/bundle/cli.js itself.
 rm -rf api/_pi
 mkdir -p api/_pi/pi-coding-agent
 # pick the esbuild binary matching this machine (nested in the pi package,
@@ -63,9 +61,11 @@ cp -R "$PKG/dist" api/_pi/pi-coding-agent/dist
 # package.json: pi's getPackageDir() walks up to find it (themes, assets);
 # PI_PACKAGE_DIR env (set by the runner) pins it regardless
 cp "$PKG/package.json" api/_pi/pi-coding-agent/package.json
-# jiti: the extension loader require()s it at runtime; it has no deps of its own
-mkdir -p api/_pi/pi-coding-agent/node_modules
-cp -R "$PKG/node_modules/jiti" api/_pi/pi-coding-agent/node_modules/jiti
+# Pi dynamically require()s jiti even for .mjs extensions. Keep the entire
+# package (including its transform assets) outside node_modules; state.py adds
+# this directory to NODE_PATH when spawning pi.
+mkdir -p api/_pi/runtime-deps
+cp -R "$PKG/node_modules/jiti" api/_pi/runtime-deps/jiti
 "$ESBUILD" "$PKG/dist/bundle/cli.js" --bundle --platform=node --format=esm \
   --outfile=api/_pi/pi-coding-agent/dist/bundle/cli.js 2>&1 | tail -1
 # drop the chunk files the single-file bundle replaces (keep dist/modes etc.)
@@ -83,11 +83,6 @@ if [ -n "$NODE_BIN" ]; then
 else
   echo "    WARNING: no node on build image PATH; runtime pi spawn will fail"
 fi
-# verify the vendored stack end to end
-if [ -x api/_pi/node ]; then
-  ANTHROPIC_API_KEY=dummy api/_pi/node api/_pi/pi-coding-agent/dist/bundle/cli.js --provider anthropic --model claude-sonnet-4-5 --version >/dev/null 2>&1 \
-    && echo "    vendored single-file pi runs OK" || echo "    WARNING: vendored pi did not run"
-fi
 echo "    node_modules after trim: kept (needed for the extension compile below)"
 
 echo "==> [3/3] vendor pi-control-layer files"
@@ -101,11 +96,13 @@ echo "    source: $SRC"
 mkdir -p pi-control-layer
 cp "$SRC/policy.schema.json" pi-control-layer/
 cp "$SRC/policy.json.example" pi-control-layer/
-# compile the extension to .mjs: pi loads .ts via jiti (pruned from the lambda)
-# but .mjs via plain import — no jiti needed
+# Precompile TypeScript; Pi still uses jiti to load the resulting .mjs.
 "$ESBUILD" "$SRC/control-layer.ts" --bundle --platform=node --format=esm \
   --outfile=pi-control-layer/control-layer.mjs 2>&1 | tail -1
 ls pi-control-layer/
 # node_modules is only build tooling — remove it AFTER the extension compile
 rm -rf node_modules package-lock.json
+# --version doesn't load extensions. Exercise the actual loader from an isolated
+# copy with all node_modules removed, without making an LLM request.
+node smoke-pi-runtime.mjs
 echo "==> build.sh complete"

@@ -114,5 +114,12 @@ def pi_env() -> dict[str, str]:
     for pkg_dir in _PI_NPM_CANDIDATES:
         if (pkg_dir / "dist" / "bundle" / "cli.js").is_file():
             env["PI_PACKAGE_DIR"] = str(pkg_dir)
+            # Pi's bundled extension loader dynamically require()s jiti, even
+            # for .mjs. Vercel prunes node_modules, so build.sh vendors it here.
+            runtime_deps = pkg_dir.parent / "runtime-deps"
+            if runtime_deps.is_dir():
+                env["NODE_PATH"] = os.pathsep.join(
+                    filter(None, (str(runtime_deps), os.environ.get("NODE_PATH", "")))
+                )
             break
     return env

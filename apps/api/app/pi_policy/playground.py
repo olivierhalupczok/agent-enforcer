@@ -228,11 +228,7 @@ def _pi_command() -> list[str]:
 
 
 def _extension_path(repo_root: str) -> str:
-    """control-layer extension: compiled .mjs first (jiti-free), else the .ts.
-
-    .ts extensions load through jiti, which the Vercel Python lambda prunes;
-    the .mjs build of the same file loads via plain import.
-    """
+    """Prefer the precompiled .mjs, else the .ts; Pi loads both through jiti."""
     candidates = (
         Path(repo_root) / "packages" / "pi-control-layer" / "control-layer.mjs",
         Path(repo_root) / "pi-control-layer" / "control-layer.mjs",  # vendored by build.sh
