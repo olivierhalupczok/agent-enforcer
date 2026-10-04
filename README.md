@@ -56,7 +56,7 @@ make install                 # installs all Python and web dependencies
 uv run pre-commit install    # runs ruff automatically on every commit
 ```
 
-## Running the demo
+## Running the demo locally
 
 Two terminals from the repo root:
 
