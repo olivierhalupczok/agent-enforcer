@@ -132,7 +132,7 @@ export function PlaygroundPage() {
         <Link to="/policies" className="font-semibold underline">
           Policies
         </Link>{' '}
-        and relax the matching rule (the hint on each card says which), so the scenario passes. Refresh the environment if needed.
+        and relax the matching rule (the hint on each card says which), so the scenario passes. Supports hot reload, no need to restart. Repopulate the files if needed.
       </div>
 
       {scenarios.isPending ? (
@@ -195,7 +195,7 @@ function ScenarioCard({
       </div>
       {result === 'running' && (
         <div aria-busy="true" className="animate-pulse rounded-lg border border-line bg-canvas p-3 text-xs text-muted">
-          The pi agent is working on it — usually done in a few seconds.
+          The agent is working on it. Usually done in a few seconds.
         </div>
       )}
       {result && result !== 'running' && <RunTranscript result={result} />}

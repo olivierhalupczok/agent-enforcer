@@ -1,53 +1,37 @@
 # hackyeah-2026
 
-Monorepo for the HackYeah 2026 project. The repo contains three applications and shared Python code:
+AI Control Layer: govern AI agents with one central policy, watch every rule fire live, and edit the policy without restarting anything.
 
-| Path            | What it is                       | Tooling                |
-| --------------- | -------------------------------- | ---------------------- |
-| `apps/api`      | Backend API (FastAPI)            | Python, uv workspace   |
-| `apps/cli`      | Command-line tool (Typer)        | Python, uv workspace   |
-| `apps/web`      | Frontend UI (React + Vite + TS)  | Node, pnpm             |
-| `apps/landing`  | Marketing landing page (Astro)   | Node, pnpm             |
-| `apps/agents`   | Demo A2A agents (LLM or mock)    | Python, standalone     |
-| `apps/test-agent` | Deterministic A2A test agent | Python, uv workspace   |
-| `packages/core` | Shared Python code for API & CLI | Python, uv workspace   |
+| Path               | What it is                            | Tooling                 |
+| ------------------ | ------------------------------------- | ----------------------- |
+| `apps/api`         | Backend API (FastAPI)                 | Python, standalone uv   |
+| `apps/web`         | Control panel UI (React + Vite + TS)  | Node, pnpm              |
+| `apps/landing`     | Marketing landing page (Astro)        | Node, pnpm              |
+| `apps/cli`         | Command-line tool (Typer)             | Python, uv workspace    |
+| `apps/agents`      | Demo A2A agents                       | Python, standalone      |
+| `apps/test-agent`  | Deterministic A2A test agent          | Python, uv workspace    |
+| `packages/core`    | Shared Python code for API and CLI    | Python, uv workspace    |
+| `packages/pi-control-layer` | pi extension that enforces the policy | TypeScript, loaded by pi |
 
-Every agent speaks [A2A 1.0](https://a2a-protocol.org/v1.0.0/specification/); the hub's profile is in [`docs/agent-contract-a2a.md`](docs/agent-contract-a2a.md).
+The panel has two contexts, switched with the tabs at the top of the sidebar:
 
-All Python code lives in a single [uv](https://docs.astral.sh/uv/) workspace with **one `uv.lock`** and **one `.venv`** at the repo root. The web app and the landing page are separate pnpm projects inside `apps/web` and `apps/landing`.
-
-```
-hackyeah-2026/
-├── apps/
-│   ├── api/            # FastAPI service
-│   ├── cli/            # Typer CLI
-│   └── web/            # React + Vite UI
-├── packages/
-│   └── core/           # shared Python library
-├── .github/workflows/  # CI
-├── .vscode/            # shared editor settings
-├── Makefile            # common dev commands
-├── pyproject.toml      # uv workspace root + tool config (ruff, mypy, pytest)
-└── uv.lock             # Python lockfile (commit it!)
-```
-
----
+- **Agent Wrapped**: the control room. Sessions, approvals, agents, guardrails, audit log, MCP servers, evaluators, security scan, test chat.
+- **Agent Integrated**: the pi harness integration. Playground (run safe scenarios against the live policy), Policies (edit the policy file), Incidents (every negative rule event), Sessions (pi session inventory).
 
 ## Prerequisites
 
-Install these once on your machine (Linux / macOS / WSL):
+Install once (Linux, macOS or WSL):
 
-| Tool        | Version | Install                                                        |
-| ----------- | ------- | -------------------------------------------------------------- |
-| git         | any     | `sudo apt install git`                                         |
-| uv          | latest  | `curl -LsSf https://astral.sh/uv/install.sh \| sh`             |
-| Node.js     | 22+     | via [nvm](https://github.com/nvm-sh/nvm): `nvm install 22`     |
-| pnpm        | 12.8.1  | `corepack enable` (version is pinned in `apps/web/package.json`) |
-| make        | any     | `sudo apt install make`                                        |
+| Tool    | Version | Install                                                         |
+| ------- | ------- | --------------------------------------------------------------- |
+| git     | any     | `sudo apt install git`                                          |
+| uv      | any  | `curl -LsSf https://astral.sh/uv/install.sh \| sh`              |
+| Node.js | 22+     | via [nvm](https://github.com/nvm-sh/nvm): `nvm install 22`       |
+| pnpm    | 12.8.1  | `corepack enable` (pinned in `apps/web/package.json`)            |
+| pi      | 0.85+   | see the [pi docs](https://pi.dev); playground scenarios need it  |
+| make    | any     | `sudo apt install make` (or use `just`, see below)               |
 
-You do **not** need to install Python yourself — uv downloads the version pinned in `.python-version` (3.12) automatically.
-
----
+You do not need to install Python yourself: uv downloads the version pinned in `.python-version` (3.12) automatically.
 
 ## First-time setup
 
@@ -55,87 +39,78 @@ You do **not** need to install Python yourself — uv downloads the version pinn
 git clone <repo-url>
 cd hackyeah-2026
 
-make install                 # installs all Python + web dependencies
+make install                 # installs all Python and web dependencies
 uv run pre-commit install    # runs ruff automatically on every commit
 ```
 
-Then open the repo root in VS Code and install the recommended extensions when prompted. If VS Code doesn't pick up the Python interpreter, run **Python: Select Interpreter** and choose `./.venv`.
+## Running the demo
 
----
-
-## Running things
-
-All `make` commands are run from the **repo root**.
-
-| Command     | What it does                                   | URL                          |
-| ----------- | ---------------------------------------------- | ---------------------------- |
-| `make api`  | Starts the API with auto-reload on port 8000   | http://localhost:8000/docs   |
-| `make web`  | Starts the Vite dev server                     | http://localhost:5173        |
-| `make landing` | Starts the Astro landing page (static). "Open the app" always goes to the production app | http://localhost:4321 |
-| `make cli`  | Shows the CLI help                             | —                            |
-| `make lint` | Ruff lint + format check + mypy                | —                            |
-| `make test` | Runs pytest across all Python packages         | —                            |
-| `make supabase` | Starts local Supabase and writes env files | http://127.0.0.1:54323 (Studio) |
-
-Run the API and the web app in two separate terminals. During development the web app proxies every `/api/*` request to `http://localhost:8000`, so frontend code can call without any CORS setup.
-
-### Local Supabase (agents database)
-
-The agents API stores data in Supabase and needs a signed-in user. To run it locally you need Docker:
+Two terminals from the repo root:
 
 ```bash
-make supabase        # start the stack, apply apps/api/supabase/migrations, write env files, create a demo user
-make supabase-stop   # stop it (data is kept in Docker volumes)
+make api        # API on :8000, auto-reload
+make web        # panel on :5173
 ```
 
-`make supabase` writes `apps/api/.env` and `apps/web/.env.local` (gitignored) with the local URL and publishable key, and creates `demo@guardrail.local`; its password is in `apps/api/supabase/.env.demo`. Studio runs at http://127.0.0.1:54323. Re-run `./scripts/supabase-env.sh` if you only need the env files again.
+Open http://localhost:5173, switch to the Agent Integrated context, and:
 
-The CLI is installed as the `acme` command:
+1. **Playground**: pick a simulated host, run a scenario (a banned command, a blocked file, a page that contains a prompt injection). The pi agent runs it and the control layer intercepts what the policy forbids. Every scenario is sandboxed in `/tmp/pi-demo-sandbox` and uses fake credentials; nothing outside the sandbox is touched.
+2. **Policies**: edit the live policy (`.pi/policy.json`). Disable the rule that blocked your scenario, save, run the scenario again, and it passes. Restore Defaults loads the seed policy from `packages/pi-control-layer/policy.json.example`.
+3. **Incidents**: every block, denial, redaction and injection detection lands here. Injection sources are auto-banned in the global config.
+4. **Sessions**: cost, token and tool-call stats for every pi session on the machine, playground runs included.
+
+The first scenario run seeds the policy and sandbox automatically; `make seed-sandbox` re-stages the demo files by hand.
+
+The Agent Wrapped context needs a Supabase database for the agents pages:
 
 ```bash
-uv run acme --help
+make supabase        # start local Supabase, apply migrations, write env files
+make supabase-stop   # stop it (data kept in Docker volumes)
 ```
 
----
+## Make targets
+
+| Command             | What it does                                    |
+| ------------------- | ----------------------------------------------- |
+| `make api`          | API on :8000 with auto-reload                   |
+| `make web`          | Vite dev server on :5173                        |
+| `make landing`      | Astro landing page on :4321                     |
+| `make cli`          | CLI help (`uv run acme`)                        |
+| `make test-agent`   | Deterministic A2A test agent                    |
+| `make seed-sandbox` | Re-stage the playground sandbox in `/tmp`        |
+| `make lint`         | ruff lint + format check + mypy                 |
+| `make test`         | pytest (root workspace + API project)           |
+| `make supabase`     | Local Supabase + env files                      |
+| `make supabase-stop`| Stop local Supabase                             |
+
+If you prefer [just](https://github.com/casey/just), a `justfile` with the same commands sits next to the Makefile (`just api`, `just web`, ...).
+
+## How the pieces fit
+
+A prompt never goes straight to an agent: the API resolves who is calling, runs the resolved guardrails on the way in, forwards the request, and runs the output guardrails on the reply. The control catalog lives in Supabase, not in the agents.
+
+The pi integration is separate: the extension in `packages/pi-control-layer` loads into the pi coding agent and enforces the policy on every tool call, directly on the host where pi runs. The live policy is `.pi/policy.json` in the repo root (gitignored, seeded from `policy.json.example`); the extension hot-reloads it, so a save on the Policies page takes effect without a restart.
+
+All Python code shares one `uv.lock` and one `.venv` at the repo root, except the API which is a standalone uv project (`apps/api`). The web app and landing page are pnpm projects.
 
 ## Day-to-day workflow
 
-### Adding Python dependencies
-
-Always add a dependency to the **specific package** that needs it:
+### Adding dependencies
 
 ```bash
-uv add --package acme-api  <package>     # API only
-uv add --package acme-cli  <package>     # CLI only
-uv add --package acme-core <package>     # shared library
-uv add --dev <package>                   # dev tooling for the whole repo
+uv add --package acme-cli <pkg>     # CLI only (workspace)
+uv add --package acme-core <pkg>    # shared library (workspace)
+uv add --dev <pkg>                  # dev tooling, repo root
+cd apps/api && uv add <pkg>         # API (standalone project)
 ```
-
-This updates the package's `pyproject.toml` and the root `uv.lock`. **Commit both.**
-
-### Adding web dependencies
 
 ```bash
 cd apps/web
-pnpm add <package>          # runtime dependency
-pnpm add -D <package>       # dev dependency
+pnpm add <pkg>                      # runtime dependency
+pnpm add -D <pkg>                   # dev dependency
 ```
 
-**Commit `package.json` and `pnpm-lock.yaml` together.** CI installs with `--frozen-lockfile` and fails if they're out of sync.
-
-### Sharing code between API and CLI
-
-Put it in `packages/core/src/acme_core/` and import it normally:
-
-```python
-from acme_core import something
-```
-
-Both apps depend on `acme-core` as a workspace package, so changes are picked up immediately — no reinstall needed.
-
-### Writing tests
-
-Put tests in a `tests/` folder next to the package's `src/`, for example `apps/api/tests/test_health.py`. pytest discovers everything under `apps/` and `packages/`.
+Commit lockfiles (`uv.lock`, `pnpm-lock.yaml`) together with the manifest changes. CI installs with `--frozen-lockfile` and fails when they drift.
 
 ### Before you push
 
@@ -145,42 +120,10 @@ make test
 cd apps/web && pnpm lint && pnpm build
 ```
 
-If ruff complains about formatting, fix it with:
+## Deployment
 
-```bash
-uv run ruff format .
-uv run ruff check . --fix
-```
-
----
+The web panel and the landing page deploy to Vercel as separate projects. The API deploys from `apps/api` (set the project's Root Directory to `apps/api`); its build step vendors the pi CLI and a node binary into the function bundle, so the playground works on serverless. Environment variables the API expects: `ANTHROPIC_API_KEY` (model access for the pi agent and the judge engine), `SUPABASE_URL`, `SUPABASE_KEY`, and `PLAYGROUND_BASE_URL` set to the API's own public URL.
 
 ## CI
 
-GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull request:
-
-- **python** — `uv sync --locked`, ruff lint, ruff format check, mypy, pytest
-- **web** — `pnpm install --frozen-lockfile`, oxlint, production build
-
-Both jobs must be green before merging.
-
----
-
-## Troubleshooting
-
-**`Could not import module "acme_api.main"`**
-The module doesn't exist or the name is wrong. Check `ls apps/api/src/` and make sure the name in the `Makefile` matches.
-
-**CI: `uv sync --locked` fails**
-`uv.lock` is out of date or wasn't committed. Run `uv lock` and commit the result.
-
-**CI: `ERR_PNPM_FROZEN_LOCKFILE_WITH_OUTDATED_LOCKFILE`**
-`package.json` changed without updating the lockfile. Run `cd apps/web && pnpm install` and commit `pnpm-lock.yaml`.
-
-**CI: pytest exits with code 5**
-No tests were collected. Make sure test files are named `test_*.py`.
-
-**`make: *** missing separator`**
-The `Makefile` has spaces instead of a tab before a command. Recipe lines must start with a real tab.
-
-**Import errors in VS Code but code runs fine**
-VS Code is using the wrong interpreter. Run **Python: Select Interpreter** and pick `./.venv`.
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull request: Python lint, format check, mypy and pytest; web lint and production build. Both must be green before merging.

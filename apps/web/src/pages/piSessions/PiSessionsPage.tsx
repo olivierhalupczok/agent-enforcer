@@ -1,4 +1,3 @@
-import { Link } from 'react-router'
 import { usePiSessions } from '../../api/playground'
 import { buttonSecondary } from '../../ui/classes'
 import { ProjectChips, SessionCard, StatsBand } from './sessionCards'
@@ -11,11 +10,6 @@ export function PiSessionsPage() {
       <header className="flex flex-wrap items-center gap-x-6 gap-y-2">
         <div className="mr-auto max-w-2xl">
           <h1 className="m-0 text-[28px] font-semibold tracking-tight">Sessions</h1>
-          <p className="m-0 text-[13px] text-muted">
-            Every pi session on this machine — playground runs included. Counts, costs and tool-call
-            stats; transcripts stay on disk. Run a scenario on the{' '}
-            <Link to="/playground" className="font-medium">Playground</Link> and watch this page grow.
-          </p>
         </div>
         <button type="button" className={buttonSecondary} onClick={() => void query.refetch()}>
           Refresh

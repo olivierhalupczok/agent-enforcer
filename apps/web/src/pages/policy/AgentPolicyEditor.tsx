@@ -2,7 +2,6 @@ import type {
   AgentPolicy,
   BudgetSection,
   CommandRule,
-  ControlPlaneSection,
   IdentitySection,
   InjectionSection,
   SystemPromptSection,
@@ -297,43 +296,6 @@ export function AgentPolicyEditor({ value, disabled, onChange, headerActions }: 
         </div>
       </fieldset>
 
-      {/* control plane */}
-      <fieldset className="m-0 rounded-lg border border-line bg-canvas/60 p-3">
-        <legend className="px-1 text-[13px] font-semibold">{sectionLabel('controlPlane')}</legend>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-1">
-            <span className={labelClass}>WebSocket URL</span>
-            <input
-              className={inputClass}
-              disabled={disabled}
-              placeholder="ws://localhost:4747"
-              value={value.controlPlane?.url ?? ''}
-              onChange={(e) =>
-                set('controlPlane', { ...(value.controlPlane ?? {}), url: e.target.value } as ControlPlaneSection)
-              }
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className={labelClass}>Fallback when unreachable</span>
-            <select
-              className={inputClass}
-              disabled={disabled}
-              value={value.controlPlane?.localFallback ?? ''}
-              onChange={(e) =>
-                set('controlPlane', {
-                  ...(value.controlPlane ?? {}),
-                  localFallback: e.target.value as ControlPlaneSection['localFallback'],
-                })
-              }
-            >
-              <option value="">default (confirm)</option>
-              <option value="confirm">confirm</option>
-              <option value="block">block</option>
-              <option value="allow">allow</option>
-            </select>
-          </label>
-        </div>
-      </fieldset>
     </div>
   )
 }
