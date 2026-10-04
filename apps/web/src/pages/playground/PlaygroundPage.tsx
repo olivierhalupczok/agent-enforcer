@@ -7,6 +7,7 @@ import { buttonPrimary, buttonSecondary } from '../../ui/classes'
 const EXPECTED_LABELS: Record<Scenario['expected'], { label: string; className: string }> = {
   blocked: { label: 'Expected: blocked', className: 'bg-[#FBE7E2] text-danger' },
   redacted: { label: 'Expected: redacted', className: 'bg-warn-bg text-warn-fg' },
+  flagged: { label: 'Expected: flagged + URL auto-banned', className: 'bg-warn-bg text-warn-fg' },
   passes: { label: 'Expected: passes', className: 'bg-teal-soft text-teal-dark' },
 }
 

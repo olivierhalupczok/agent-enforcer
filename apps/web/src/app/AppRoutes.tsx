@@ -7,6 +7,7 @@ import { GuardrailsPage } from '../pages/guardrails/GuardrailsPage'
 import { McpServersPage } from '../pages/mcp/McpServersPage'
 import { PolicyPage } from '../pages/policy/PolicyPage'
 import { PlaygroundPage } from '../pages/playground/PlaygroundPage'
+import { IncidentsPage } from '../pages/incidents/IncidentsPage'
 import { Placeholder } from '../pages/Placeholder'
 import { SignInPage } from '../pages/SignInPage'
 import { TestChatPage } from '../pages/test/TestChatPage'
@@ -23,6 +24,7 @@ const PAGES: Partial<Record<string, ReactElement>> = {
   '/test': <TestChatPage />,
   '/policies': <PolicyPage />,
   '/playground': <PlaygroundPage />,
+  '/incidents': <IncidentsPage />,
 }
 
 export function AppRoutes() {

@@ -11,9 +11,10 @@
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { join, resolve, isAbsolute } from "node:path";
+import { join, resolve, isAbsolute, dirname } from "node:path";
 import { homedir } from "node:os";
-import { readFileSync, watchFile, statSync } from "node:fs";
+import { readFileSync, watchFile, statSync, writeFileSync, renameSync, mkdirSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { hostname } from "node:os";
 
 // ---------------------------------------------------------------- policy types
@@ -391,7 +392,7 @@ function redactText(text: string, path: string | null): { text: string; applied:
   return { text: out, applied };
 }
 
-function scanInjection(text: string, ctx: ExtensionContext, source: string): string {
+function scanInjection(text: string, ctx: ExtensionContext, source: string, command?: string): string {
   const inj = state.merged.injection;
   if (!inj || inj.enabled === false) return text;
   const hits: string[] = [];
@@ -401,11 +402,63 @@ function scanInjection(text: string, ctx: ExtensionContext, source: string): str
   if (hits.length === 0) return text;
   const mode = inj.onDetect ?? "warn";
   reportAudit("injection_detected", { ruleIds: hits, detail: source }, ctx);
+  const url = command ? extractUrl(command) : extractUrl(text);
+  recordIncident({ ts: new Date().toISOString(), agent: state.agentId, source, hits, mode, detail: command ?? source.slice(0, 200), url });
+  if (url) autoBanSource(url, ctx, hits);
   if (mode === "block") {
     return `[CONTROL LAYER: content from ${source} blocked — prompt-injection signature(s): ${hits.join(", ")}]`;
   }
   ctx.ui.notify(`Control layer: possible prompt injection in ${source} (${hits.join(", ")})`, "warning");
   return `[CONTROL LAYER WARNING: possible prompt injection (${hits.join(", ")}) in ${source}]\n${text}`;
+}
+
+// ---------------------------------------------------------------- incidents + auto-ban
+
+function incidentsPath(): string {
+  if (process.env.PI_INCIDENTS_PATH) return resolve(process.env.PI_INCIDENTS_PATH);
+  return resolve(state.policyPath, "..", "incidents.json");
+}
+
+function recordIncident(incident: Record<string, unknown>): void {
+  try {
+    let incidents: unknown[] = [];
+    try { incidents = JSON.parse(readFileSync(incidentsPath(), "utf8")); } catch { /* first incident */ }
+    if (!Array.isArray(incidents)) incidents = [];
+    incidents.push(incident);
+    // atomic-ish: temp file + rename so a concurrent reader never sees a partial file
+    const path = incidentsPath();
+    mkdirSync(dirname(path), { recursive: true });
+    const tmp = `${path}.tmp-${process.pid}`;
+    writeFileSync(tmp, JSON.stringify(incidents, null, 2));
+    renameSync(tmp, path);
+  } catch { /* incident recording must never break the run */ }
+}
+
+function extractUrl(text: string): string | null {
+  const m = /https?:\/\/[^\s"'`]+/.exec(text);
+  return m ? m[0].replace(/[),.]+$/, "") : null;
+}
+
+// Injection sources get auto-banned: a command-glob rule scoped to the current host.
+// Reuses the standard banned-command enforcement — the next attempt to fetch the
+// source is refused. Written through the live policy file (validated by reload).
+function autoBanSource(url: string, ctx: ExtensionContext, hits: string[]): void {
+  try {
+    const id = `auto-ban-${createHash("sha256").update(url).digest("hex").slice(0, 8)}`;
+    const policy = state.policy;
+    if (!policy) return;
+    if ((policy.agents?.[state.agentId]?.commands?.banned ?? []).some((r) => r.id === id)) return; // already banned
+    const rule: Rule = { id, pattern: `*${url}*`, reason: `Auto-banned: injection source (${hits.join(", ")})`, enabled: true };
+    policy.agents = policy.agents ?? {};
+    const host = policy.agents[state.agentId] ?? (policy.agents[state.agentId] = {});
+    host.commands = host.commands ?? {};
+    host.commands.banned = [...(host.commands.banned ?? []), rule];
+    const path = state.policyPath;
+    const tmp = `${path}.tmp-${process.pid}`;
+    writeFileSync(tmp, JSON.stringify(policy, null, 2));
+    renameSync(tmp, path);
+    reportAudit("source_auto_banned", { ruleId: id, detail: url }, ctx);
+  } catch { /* auto-ban is best-effort */ }
 }
 
 // ---------------------------------------------------------------- extension wiring
@@ -517,7 +570,7 @@ export default function (pi: ExtensionAPI) {
         if (r.applied.length) { text = r.text; changed = true; reportAudit("redacted", { tool: "read", ruleIds: r.applied, detail: path }, ctx); }
       }
       if (state.merged.injection?.scanToolResults !== false) {
-        const scanned = scanInjection(text, ctx, source);
+        const scanned = scanInjection(text, ctx, source, event.toolName === "bash" ? String(event.input?.command ?? "") : undefined);
         if (scanned !== text) { text = scanned; changed = true; }
       }
       return { ...c, text };

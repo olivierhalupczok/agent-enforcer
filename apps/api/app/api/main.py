@@ -3,6 +3,7 @@ from fastapi import APIRouter
 
 from app.api.routes import bindings, gateway_keys, guardrails, items, mcp_servers, signatures
 from app.api.routes.agents.router import router as agents_router
+from app.api.routes.pi_policy.incident_routes import router as pi_incidents_router
 from app.api.routes.pi_policy.playground_routes import router as pi_playground_router
 from app.api.routes.pi_policy.routes import router as pi_policy_router
 
@@ -18,3 +19,4 @@ api_router.include_router(mcp_servers.router)
 api_router.include_router(signatures.router)
 api_router.include_router(pi_policy_router)
 api_router.include_router(pi_playground_router)
+api_router.include_router(pi_incidents_router)
