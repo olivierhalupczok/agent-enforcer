@@ -39,7 +39,7 @@ from app.api.routes.agents.deps import ensure_public_upstream
 from app.audit.recorder import AuditRecorder, get_audit_recorder
 from app.gateway import a2a
 from app.gateway.pipeline import GuardrailEngine, LocalEngine, StageOutcome, dump_trace, run_stage
-from app.gateway.policy import PolicyLoader, get_policy_loader
+from app.gateway.policy import PolicyLoader, get_policy_loader, read_role
 from app.gateway.resolver import AgentResolver, get_agent_resolver
 
 UPSTREAM_TIMEOUT_SECONDS = 30.0
@@ -162,15 +162,16 @@ async def forward_to_agent(
     if not isinstance(params, dict) or not isinstance(params.get("message"), dict):
         return _rpc_error(rpc_id, a2a.INVALID_PARAMS, "params.message is required")
     message = params["message"]
+    role, stripped = read_role(call)
 
     # --- B-02: input guardrails ---
-    policy = await run_in_threadpool(policies.load, agent_id, key)
+    policy = await run_in_threadpool(policies.load, agent_id, key, role)
     guarded = bool(policy.input or policy.output)
     inbound = run_stage(policy.input, "input", [message], engine)
     if inbound.blocked_reason is not None:
-        return _blocked(rpc_id, message, "input", inbound)
-    if guarded:
-        body = json.dumps(call).encode()  # the call with any redactions applied
+        return _blocked(rpc_id, message, "input", inbound, role)
+    if guarded or stripped:
+        body = json.dumps(call).encode()  # the call with any redactions, without demo fields
 
     # --- forward to the agent's JSON-RPC endpoint ---
     headers = {"Content-Type": "application/json", a2a.A2A_VERSION_HEADER: a2a.A2A_VERSION}
@@ -219,8 +220,12 @@ async def forward_to_agent(
             message,
             "output",
             StageOutcome(trace=trace, blocked_reason=outbound.blocked_reason),
+            role,
         )
-    a2a.add_hub_metadata(result, {"trace": dump_trace(trace)})
+    hub: dict[str, Any] = {"trace": dump_trace(trace), "policyVersion": policy.version}
+    if role is not None:
+        hub["role"] = role
+    a2a.add_hub_metadata(result, hub)
     return JSONResponse(reply)
 
 
@@ -240,8 +245,16 @@ async def _count_turn(
         logger.warning("Could not record a turn for agent %s", agent_id, exc_info=True)
 
 
-def _blocked(rpc_id: Any, message: a2a.Json, stage: str, outcome: StageOutcome) -> JSONResponse:
+def _blocked(
+    rpc_id: Any,
+    message: a2a.Json,
+    stage: str,
+    outcome: StageOutcome,
+    role: str | None = None,
+) -> JSONResponse:
     """The refusal task for a blocked call; the agent's reply, if any, is never shown."""
-    hub = {"blocked": True, "stage": stage, "trace": dump_trace(outcome.trace)}
+    hub: dict[str, Any] = {"blocked": True, "stage": stage, "trace": dump_trace(outcome.trace)}
+    if role is not None:
+        hub["role"] = role
     task = a2a.rejected_task(message.get("contextId"), outcome.blocked_reason or "Blocked", hub)
     return JSONResponse({"jsonrpc": a2a.JSONRPC_VERSION, "id": rpc_id, "result": task})

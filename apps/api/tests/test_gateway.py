@@ -92,8 +92,8 @@ class FakeResolver:
 class NoGuardrails:
     """B-01's behaviour: no guardrails attached (B-02's tests attach some)."""
 
-    def load(self, agent_id: str, key: str) -> EffectivePolicy:
-        return resolve([], [], agent_id=agent_id)
+    def load(self, agent_id: str, key: str, role: str | None = None) -> EffectivePolicy:
+        return resolve([], [], agent_id=agent_id, role=role)
 
 
 class Recorder(httpx.AsyncBaseTransport):
