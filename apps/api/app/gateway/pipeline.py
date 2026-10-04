@@ -125,8 +125,14 @@ def run_stage(
         reason = result.reason
         if unchecked:
             reason += f" ({unchecked} file part(s) not checked)"
-        trace.append(_entry(rule, stage, result.result, reason, started, result.simulated))
-        if result.result == "block":
+        verdict: Verdict = result.result
+        # llm_judge / moderation are keyword heuristics. A guessed block would look like a
+        # real refusal, so it is downgraded to a warning that says so.
+        if verdict == "block" and result.simulated:
+            verdict = "warn"
+            reason = f"{reason}; a simulated verdict cannot block, so this is a warning"
+        trace.append(_entry(rule, stage, verdict, reason, started, result.simulated))
+        if verdict == "block":
             return StageOutcome(trace=trace, blocked_reason=_blocked(rule, reason))
 
     return StageOutcome(trace=trace)
