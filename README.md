@@ -85,11 +85,39 @@ make supabase-stop   # stop it (data kept in Docker volumes)
 
 If you prefer [just](https://github.com/casey/just), a `justfile` with the same commands sits next to the Makefile (`just api`, `just web`, ...).
 
-## How the pieces fit
+## How the pieces fit - Agent Integrated (pi harness integration)
 
-A prompt never goes straight to an agent: the API resolves who is calling, runs the resolved guardrails on the way in, forwards the request, and runs the output guardrails on the reply. The control catalog lives in Supabase, not in the agents.
+A prompt in the Agent Wrapped context never goes straight to an agent: the API resolves who is calling, runs the resolved guardrails on the way in, forwards the request, and runs the output guardrails on the reply. The control catalog lives in Supabase, not in the agents.
 
-The pi integration is separate: the extension in `packages/pi-control-layer` loads into the pi coding agent and enforces the policy on every tool call, directly on the host where pi runs. The live policy is `.pi/policy.json` in the repo root (gitignored, seeded from `policy.json.example`); the extension hot-reloads it, so a save on the Policies page takes effect without a restart.
+The Agent Integrated side is separate: the extension in `packages/pi-control-layer` loads into the pi coding agent and enforces the policy on every tool call, directly on the host where pi runs. The live policy is `.pi/policy.json` in the repo root (gitignored, seeded from `policy.json.example`); the extension hot-reloads it, so a save on the Policies page takes effect without a restart.
+
+```mermaid
+flowchart LR
+    admin["Admin"]
+    panel["Control panel"]
+    api["API :8000"]
+    policy[("Central policy\n.pi/policy.json")]
+    incidents[("Incident log\n.pi/incidents.json")]
+    subgraph host["Host running the agent"]
+        user["Employee"]
+        pi["pi agent"]
+        ext["Control layer extension"]
+    end
+    work["Real work: bash, files, fetches"]
+
+    admin -- "decides what agents\nmay run, live" --> panel
+    panel -- "edit rules" --> api
+    panel -- "review what fired" --> incidents
+    api -- "validates against schema,\natomic write, backup" --> policy
+    policy -- "hot-reload, no restart" --> ext
+    user -- "prompts" --> pi
+    pi -- "every tool call" --> ext
+    ext -- "allow, block, redact,\napproval" --> work
+    ext -- "log every negative event,\nauto-ban the source" --> incidents
+    incidents -- "new rules visible\non the Policies page" --> policy
+```
+
+How it works in production: employees run pi agents on their machines. An admin decides what those agents may do, from the control panel, while they run. The policy reaches every host without a restart; the agent picks up a change within a second of the save. When a fetched source carries a prompt injection, the control layer flags it, records the incident, and bans that source on its own. The admin sees each event as it lands and can adjust any rule from the same page.
 
 All Python code shares one `uv.lock` and one `.venv` at the repo root, except the API which is a standalone uv project (`apps/api`). The web app and landing page are pnpm projects.
 
