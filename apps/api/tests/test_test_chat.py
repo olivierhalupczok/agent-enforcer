@@ -140,8 +140,20 @@ def test_reply_carries_the_trace_usage_limits_and_scores() -> None:
     ]
     assert hub["policyVersion"]
     assert hub["role"] == "support"
-    assert hub["usage"] == {"inputTokens": 2, "outputTokens": 3, "estimated": False}
-    assert hub["limits"] == []
+    # B-05: the agent's own usage, priced at the default rate (3 / 15 USD per million tokens)
+    assert hub["usage"] == {
+        "inputTokens": 2,
+        "outputTokens": 3,
+        "costUsd": 0.000051,
+        "model": "default",
+        "estimated": False,
+    }
+    assert [(m["name"], m["used"], m["unit"]) for m in hub["limits"]] == [
+        ("Tokens per call", 5, "tokens"),
+        ("Cost per call", 0.000051, "USD"),
+        ("Session tokens", 5, "tokens"),
+        ("Session cost", 0.000051, "USD"),
+    ]
     assert hub["scores"] == []
     assert MEMORY.events == []  # a pass is not an audit event
 
