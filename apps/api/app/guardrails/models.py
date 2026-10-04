@@ -6,7 +6,15 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 Engine = Literal["regex", "llm_judge", "library", "moderation"]
 Stage = Literal["input", "output"]
 Action = Literal["block", "redact", "warn"]
-TemplateId = Literal["pii", "prompt_injection", "toxicity", "topic", "regex", "llm_judge"]
+TemplateId = Literal[
+    "pii",
+    "prompt_injection",
+    "toxicity",
+    "topic",
+    "regex",
+    "llm_judge",
+    "response_relevance",
+]
 PiiEntity = Literal["EMAIL", "PHONE", "CREDIT_CARD", "IBAN"]
 PII_ENTITIES: tuple[PiiEntity, ...] = ("EMAIL", "PHONE", "CREDIT_CARD", "IBAN")
 
@@ -40,6 +48,11 @@ class TopicConfig(BaseModel):
     mode: Literal["allow", "deny"]
     topics: list[str] = Field(min_length=1)
 
+    @field_validator("topics")
+    @classmethod
+    def normalize_topics(cls, topics: list[str]) -> list[str]:
+        return _normalize_unique_list(topics, "topics", allow_empty=False)
+
 
 class RegexConfig(BaseModel):
     template: Literal["regex"]
@@ -57,8 +70,25 @@ class LlmJudgeConfig(BaseModel):
     prompt: str = Field(min_length=10)
 
 
+class ResponseRelevanceConfig(BaseModel):
+    template: Literal["response_relevance"]
+    min_overlap_score: float = Field(default=0.2, ge=0, le=1)
+    required_terms: list[str] = Field(default_factory=list)
+
+    @field_validator("required_terms")
+    @classmethod
+    def normalize_required_terms(cls, terms: list[str]) -> list[str]:
+        return _normalize_unique_list(terms, "required_terms", allow_empty=True)
+
+
 GuardrailConfig = Annotated[
-    PiiConfig | PromptInjectionConfig | ToxicityConfig | TopicConfig | RegexConfig | LlmJudgeConfig,
+    PiiConfig
+    | PromptInjectionConfig
+    | ToxicityConfig
+    | TopicConfig
+    | RegexConfig
+    | LlmJudgeConfig
+    | ResponseRelevanceConfig,
     Field(discriminator="template"),
 ]
 
@@ -107,6 +137,12 @@ TEMPLATES: dict[str, TemplateInfo] = {
         TemplateInfo(
             id="llm_judge", label="LLM judge", engines=["llm_judge"], actions=["block", "warn"]
         ),
+        TemplateInfo(
+            id="response_relevance",
+            label="Response relevance",
+            engines=["library"],
+            actions=["block", "warn"],
+        ),
     ]
 }
 
@@ -135,6 +171,8 @@ class GuardrailRule(BaseModel):
             )
         if len(set(self.stages)) != len(self.stages):
             raise ValueError("stages must be unique")
+        if isinstance(self.config, ResponseRelevanceConfig) and self.stages != ["output"]:
+            raise ValueError("response_relevance guardrails must run on output only")
         return self
 
 
@@ -175,6 +213,23 @@ class InjectionSignature(BaseModel):
     @classmethod
     def must_compile(cls, v: str) -> str:
         return _must_compile(v)
+
+
+def _normalize_unique_list(values: list[str], field: str, *, allow_empty: bool) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        item = value.strip()
+        if not item:
+            raise ValueError(f"{field} cannot contain empty values")
+        key = item.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(item)
+    if not normalized and not allow_empty:
+        raise ValueError(f"{field} must contain at least one value")
+    return normalized
 
 
 # --- dry run ---

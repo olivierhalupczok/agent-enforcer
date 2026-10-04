@@ -64,7 +64,7 @@ def create_guardrail(body: GuardrailCreate, repo: Repo, role: Role) -> Guardrail
 @router.post("/guardrails/dry-run")
 def dry_run(body: DryRunRequest, judge: JudgeDep) -> DryRunResult:
     try:
-        return evaluate(body, body.text, list(store.signatures.values()), judge)
+        return evaluate(body, body.text, list(store.signatures.values()), judge=judge)
     except JudgeUnavailableError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

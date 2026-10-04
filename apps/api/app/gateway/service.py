@@ -27,6 +27,7 @@ from app.bindings.models import EffectivePolicy
 from app.core.config import settings
 from app.gateway import a2a, limits
 from app.gateway.pipeline import (
+    GuardrailContext,
     GuardrailEngine,
     LocalEngine,
     StageOutcome,
@@ -356,8 +357,14 @@ async def send_guarded(
 
     # --- output guardrails ---
     result = reply["result"]
+    input_text, _ = a2a.checked_text([message])
     outbound = await run_in_threadpool(
-        run_stage, policy.output, "output", a2a.reply_holders(result), engine
+        run_stage,
+        policy.output,
+        "output",
+        a2a.reply_holders(result),
+        engine,
+        GuardrailContext(input_text=input_text),
     )
     trace = inbound.trace + outbound.trace
     await _record_events(audit, context_id, trace, policy)

@@ -36,6 +36,8 @@ def test_templates_list_their_engines() -> None:
     assert templates["pii"]["entities"] == ["EMAIL", "PHONE", "CREDIT_CARD", "IBAN"]
     assert templates["toxicity"]["engines"] == ["moderation", "llm_judge"]
     assert templates["topic"]["engines"] == ["llm_judge"]
+    assert templates["response_relevance"]["engines"] == ["library"]
+    assert templates["response_relevance"]["actions"] == ["block", "warn"]
     assert "engine" not in templates["pii"]
 
 
@@ -72,6 +74,70 @@ def test_redact_not_allowed_for_toxicity() -> None:
 def test_bad_regex_rejected() -> None:
     r = create(engine="regex", action="block", config={"template": "regex", "pattern": "(x"})
     assert r.status_code == 422
+
+
+def test_response_relevance_is_output_only_and_not_redactable() -> None:
+    valid = create(
+        name="Relevance",
+        engine="library",
+        stages=["output"],
+        action="block",
+        config={"template": "response_relevance"},
+    )
+    assert valid.status_code == 201
+
+    wrong_stage = create(
+        name="Relevance",
+        engine="library",
+        stages=["input"],
+        action="block",
+        config={"template": "response_relevance"},
+    )
+    assert wrong_stage.status_code == 422
+    assert "response_relevance guardrails must run on output only" in wrong_stage.text
+
+    redact = create(
+        name="Relevance",
+        engine="library",
+        stages=["output"],
+        action="redact",
+        config={"template": "response_relevance"},
+    )
+    assert redact.status_code == 422
+
+
+def test_text_lists_are_trimmed_and_deduplicated() -> None:
+    topic = create(
+        name="Topic",
+        engine="llm_judge",
+        stages=["input"],
+        action="block",
+        config={"template": "topic", "mode": "allow", "topics": [" orders ", "Orders", "returns"]},
+    )
+    assert topic.status_code == 201
+    assert topic.json()["config"]["topics"] == ["orders", "returns"]
+
+    relevance = create(
+        name="Relevance",
+        engine="library",
+        stages=["output"],
+        action="block",
+        config={
+            "template": "response_relevance",
+            "required_terms": [" tracking ", "Tracking", "order"],
+        },
+    )
+    assert relevance.status_code == 201
+    assert relevance.json()["config"]["required_terms"] == ["tracking", "order"]
+
+    empty_topic = create(
+        name="Topic",
+        engine="llm_judge",
+        stages=["input"],
+        action="block",
+        config={"template": "topic", "mode": "allow", "topics": [" "]},
+    )
+    assert empty_topic.status_code == 422
 
 
 def test_description_round_trips_and_is_limited() -> None:
