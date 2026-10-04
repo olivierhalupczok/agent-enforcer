@@ -1,6 +1,17 @@
 # Guardrail Hub
 
-## MAIN VIDEO ON YOUTUBE: https://youtu.be/Unkrv2juAcw
+Quick guardrails showcase:  
+https://github.com/user-attachments/assets/ee1e1934-8652-417a-a219-bddbe61ccb2c
+
+See for yourself:  
+https://hackyeah-2026-theta.vercel.app/playground
+
+Landing page:  
+https://hackyeah-2026-c3ff.vercel.app/#how
+
+Agents Wrapped page:  
+https://hackyeah-2026-theta.vercel.app/sessions
+
 
 AI Control Layer: govern AI agents with one central policy, watch every rule fire live, and edit the policy without restarting anything.
 
