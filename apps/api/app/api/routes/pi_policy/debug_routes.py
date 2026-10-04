@@ -40,6 +40,12 @@ def debug_pi() -> dict[str, object]:
             "cliJs": os.path.isfile(os.path.join(pkg, "dist", "bundle", "cli.js")),
             "distListing": sorted(os.listdir(dist))[:10] if os.path.isdir(dist) else None,
             "pkgSizeBytes": _du(pkg) if os.path.isdir(pkg) else 0,
+            "pkgListing": sorted(os.listdir(pkg))[:20] if os.path.isdir(pkg) else None,
+            "pkgNodeModules": sorted(os.listdir(os.path.join(pkg, "node_modules")))[:20]
+            if os.path.isdir(os.path.join(pkg, "node_modules"))
+            else None,
+            "packageJson": os.path.isfile(os.path.join(pkg, "package.json")),
+            "piNode": os.path.isfile(os.path.join(os.path.dirname(pkg), "node")),
         }
 
     node_candidates = [
