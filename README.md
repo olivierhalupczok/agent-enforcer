@@ -1,4 +1,4 @@
-# hackyeah-2026
+# Guardrail Hub
 
 AI Control Layer: govern AI agents with one central policy, watch every rule fire live, and edit the policy without restarting anything.
 

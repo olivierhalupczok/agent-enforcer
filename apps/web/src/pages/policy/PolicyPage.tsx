@@ -119,19 +119,7 @@ export function PolicyPage() {
     <PageShell>
       <PageHeader
         title="Policies"
-        meta={
-          <span>
-            {loaded ? (
-              <>
-                <span className="font-mono">{loaded.path}</span>
-                {loaded.lastModifiedUtc && <> · modified {new Date(loaded.lastModifiedUtc).toLocaleString()}</>}
-                {loaded.sizeBytes != null && <> · {loaded.sizeBytes} B</>}
-              </>
-            ) : (
-              'pi control layer policy (.pi/policy.json)'
-            )}
-          </span>
-        }
+        meta={loaded?.lastModifiedUtc && `modified ${new Date(loaded.lastModifiedUtc).toLocaleString()}`}
         actions={loaded && (
           <>
             <button
