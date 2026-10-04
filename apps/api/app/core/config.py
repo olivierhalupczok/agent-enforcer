@@ -19,6 +19,8 @@ def _repo_root() -> Path:
         return vercel_task
     if os.environ.get("VERCEL"):  # runtime flag; belt and suspenders for the path probe
         return _API_ROOT  # the bundle root is the API project dir itself
+    # config.py is <repo>/apps/api/app/core/config.py:
+    # _API_ROOT = <repo>/apps/api, so the repo root is one level above it
     return _API_ROOT.parents[1]
 
 
