@@ -21,7 +21,6 @@ from pydantic.alias_generators import to_camel
 from app.bindings.models import EffectiveGuardrail, Source
 from app.gateway.a2a import Json, checked_text, text_parts
 from app.guardrails.evaluate import GuardrailContext, evaluate
-from app.guardrails.evaluate import evaluate
 from app.guardrails.judge import Judge
 from app.guardrails.models import DryRunResult, Engine, Guardrail, Stage
 from app.store import store
@@ -55,9 +54,13 @@ class LocalEngine:
         stage: Stage,
         context: GuardrailContext | None = None,
     ) -> DryRunResult:
-        return evaluate(guardrail, text, list(store.signatures.values()), context)
-    def check(self, guardrail: Guardrail, text: str, stage: Stage) -> DryRunResult:
-        return evaluate(guardrail, text, list(store.signatures.values()), self._judge)
+        return evaluate(
+            guardrail,
+            text,
+            list(store.signatures.values()),
+            context=context,
+            judge=self._judge,
+        )
 
 
 class TraceEntry(BaseModel):

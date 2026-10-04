@@ -150,7 +150,10 @@ def test_an_unreachable_judge_on_an_optional_guardrail_only_warns() -> None:
     outcome = run_stage([judge_rule()], "output", [{"parts": [{"text": "hi"}]}], engine)
     assert outcome.blocked_reason is None
     assert outcome.trace[0].verdict == "warn"
-    assert outcome.trace[0].reason == "Guardrail failed (JudgeUnavailableError); not enforced"
+    assert (
+        outcome.trace[0].reason
+        == "Guardrail failed (JudgeUnavailableError); optional rule was not enforced"
+    )
 
 
 class FakeMessages:

@@ -358,7 +358,8 @@ async def send_guarded(
     # --- output guardrails ---
     result = reply["result"]
     input_text, _ = a2a.checked_text([message])
-    outbound = run_stage(
+    outbound = await run_in_threadpool(
+        run_stage,
         policy.output,
         "output",
         a2a.reply_holders(result),
