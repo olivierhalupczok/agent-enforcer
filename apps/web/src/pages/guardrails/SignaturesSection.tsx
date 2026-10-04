@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useAddSignature, useDeleteSignature, useSignatures } from '../../api/guardrails'
 import { useRole } from '../../app/role'
 import { buttonPrimary, buttonSecondary, inputClass } from '../../ui/classes'
+import { EmptyState, LoadingRows } from '../../ui/Page'
 
 export function SignaturesSection() {
   const { role } = useRole()
@@ -12,6 +13,7 @@ export function SignaturesSection() {
   const [adding, setAdding] = useState(false)
   const [id, setId] = useState('')
   const [regex, setRegex] = useState('')
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const addButtonRef = useRef<HTMLButtonElement>(null)
   const wasAdding = useRef(false)
 
@@ -33,7 +35,12 @@ export function SignaturesSection() {
   }
 
   const deleteSignature = (signatureId: string) =>
-    remove.mutate(signatureId, { onSuccess: () => addButtonRef.current?.focus() })
+    remove.mutate(signatureId, {
+      onSuccess: () => {
+        setConfirmingId(null)
+        addButtonRef.current?.focus()
+      },
+    })
 
   return (
     <section aria-labelledby="signatures-title" className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-5 sm:p-6">
@@ -90,7 +97,7 @@ export function SignaturesSection() {
           </div>
           <div className="flex gap-2">
             <button type="submit" className={buttonPrimary} disabled={!id.trim() || !regex || add.isPending}>
-              Save
+              {add.isPending ? 'Saving…' : 'Save'}
             </button>
             <button type="button" className={buttonSecondary} onClick={close}>
               Cancel
@@ -112,23 +119,45 @@ export function SignaturesSection() {
           </button>
         </div>
       ) : signatures.isPending ? (
-        <p className="m-0 text-sm text-muted">Loading signatures…</p>
+        <LoadingRows label="Loading signatures" count={2} />
+      ) : signatures.data.length === 0 ? (
+        <EmptyState title="No injection signatures" description="No company-wide signatures are configured." />
       ) : (
         <ul className="m-0 flex list-none flex-col divide-y divide-line p-0">
           {signatures.data.map((s) => (
-            <li key={s.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2.5">
-              <span className="min-w-48 font-mono text-[13px] font-semibold">{s.id}</span>
-              <code className="min-w-0 flex-1 font-mono text-[13px] break-all text-muted">{s.regex}</code>
-              {isAdmin && (
-                <button
-                  type="button"
-                  aria-label={`Delete ${s.id}`}
-                  disabled={remove.isPending}
-                  onClick={() => deleteSignature(s.id)}
-                  className={`${buttonSecondary} px-3 text-xs`}
-                >
-                  Delete
-                </button>
+            <li key={s.id} className="flex flex-col gap-3 py-3">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <span className="min-w-48 font-mono text-[13px] font-semibold">{s.id}</span>
+                <code className="min-w-0 flex-1 font-mono text-[13px] break-all text-muted">{s.regex}</code>
+                {isAdmin && confirmingId !== s.id && (
+                  <button
+                    type="button"
+                    aria-label={`Delete ${s.id}`}
+                    disabled={remove.isPending}
+                    onClick={() => setConfirmingId(s.id)}
+                    className={`${buttonSecondary} px-3 text-xs`}
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+              {confirmingId === s.id && (
+                <div role="group" aria-label={`Confirm deletion of ${s.id}`} className="flex flex-wrap items-center gap-2 rounded-lg bg-[#FBE7E2] p-3">
+                  <span className="mr-auto text-sm font-semibold text-danger">Delete {s.id}?</span>
+                  <button
+                    type="button"
+                    autoFocus
+                    aria-label={`Confirm delete ${s.id}`}
+                    disabled={remove.isPending}
+                    onClick={() => deleteSignature(s.id)}
+                    className={`${buttonSecondary} border-danger px-3 text-xs text-danger`}
+                  >
+                    {remove.isPending ? 'Deleting…' : 'Confirm delete'}
+                  </button>
+                  <button type="button" disabled={remove.isPending} onClick={() => setConfirmingId(null)} className={`${buttonSecondary} px-3 text-xs`}>
+                    Cancel
+                  </button>
+                </div>
               )}
             </li>
           ))}

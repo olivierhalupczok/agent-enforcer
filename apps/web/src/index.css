@@ -50,4 +50,41 @@
   .on-dark :focus-visible {
     outline-color: var(--color-teal-bright);
   }
+
+  ::selection {
+    background: var(--color-teal-soft);
+    color: var(--color-teal-dark);
+  }
+
+  html {
+    scrollbar-color: var(--color-line-strong) var(--color-canvas);
+  }
+}
+
+@layer components {
+  .sessions-table,
+  .data-table {
+    scrollbar-color: var(--color-line-strong) var(--color-surface);
+    scrollbar-width: thin;
+  }
+
+  .session-limit-meter {
+    appearance: none;
+    border: 0;
+    background: var(--color-line);
+  }
+
+  .session-limit-meter::-webkit-progress-bar {
+    background: var(--color-line);
+  }
+
+  .session-limit-meter::-webkit-progress-value {
+    background: var(--color-teal);
+    border-radius: 999px;
+  }
+
+  .session-limit-meter::-moz-progress-bar {
+    background: var(--color-teal);
+    border-radius: 999px;
+  }
 }

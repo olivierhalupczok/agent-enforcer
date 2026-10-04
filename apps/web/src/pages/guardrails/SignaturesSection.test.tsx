@@ -43,10 +43,19 @@ describe('Injection signatures', () => {
   it('lets admins delete a signature', async () => {
     const user = await open()
     await user.click(within(section()).getByRole('button', { name: 'Delete ignore-instructions' }))
+    expect(within(section()).getByText('Delete ignore-instructions?')).toBeInTheDocument()
+    await user.click(within(section()).getByRole('button', { name: 'Confirm delete ignore-instructions' }))
     await within(section()).findByText('reveal-prompt')
     expect(within(section()).queryByText('ignore-instructions')).not.toBeInTheDocument()
     expect(fakeApi.signatures.map((s) => s.id)).toEqual(['reveal-prompt'])
     expect(within(section()).getByRole('button', { name: 'Add signature' })).toHaveFocus()
+  })
+
+  it('shows an empty state when no signatures are configured', async () => {
+    fakeApi.signatures = []
+    renderApp('/guardrails', 'admin')
+    expect(await within(section()).findByText('No injection signatures')).toBeInTheDocument()
+    expect(within(section()).getByText('No company-wide signatures are configured.')).toBeInTheDocument()
   })
 
   it('is read-only for developers', async () => {

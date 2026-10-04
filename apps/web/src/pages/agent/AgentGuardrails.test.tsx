@@ -151,4 +151,16 @@ describe('Agent guardrails (bindings)', () => {
     expect(screen.queryByLabelText('Attach guardrail')).not.toBeInTheDocument()
     expect(within(section()).getByRole('list', { name: 'Always applied' })).toBeInTheDocument()
   })
+
+  it('shows and retries an effective guardrails error', async () => {
+    server.use(
+      http.get(apiPath('/effective-guardrails'), () => HttpResponse.json({ detail: 'Policy unavailable' }, { status: 503 }), {
+        once: true,
+      }),
+    )
+    const user = await open()
+    expect(await within(section()).findByText("Couldn't load effective guardrails.")).toBeInTheDocument()
+    await user.click(within(section()).getByRole('button', { name: 'Retry' }))
+    expect(await within(section()).findByRole('group', { name: 'Guardrail order' })).toBeInTheDocument()
+  })
 })

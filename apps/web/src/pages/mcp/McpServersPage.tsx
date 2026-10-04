@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { useDeleteMcpServer, useMcpServers } from '../../api/mcpServers'
 import type { McpServer } from '../../api/types'
 import { buttonPrimary, buttonSecondary } from '../../ui/classes'
+import { EmptyState, LoadingRows, PageHeader, PageShell, TableFrame } from '../../ui/Page'
 import { RegisterMcpServerForm } from './RegisterMcpServerForm'
 
-const HEADERS = ['Server', 'URL', 'Auth', 'Allowed tools', 'Agents', '']
-const cell = 'px-4 py-3 align-middle'
+const HEADERS = ['Server', 'URL', 'Auth', 'Allowed tools', '']
+const cell = 'px-5 py-4 align-middle'
 
 function authSummary(auth: McpServer['auth']): string {
   if (auth.type === 'api_key') return `API key (${auth.header ?? 'Authorization'})`
@@ -43,33 +44,34 @@ export function McpServersPage() {
       </div>
     )
   } else if (servers.isPending) {
-    content = <p className="m-0 text-sm text-muted">Loading MCP servers…</p>
+    content = <LoadingRows label="Loading MCP servers" />
   } else if (servers.data.length === 0) {
     content = (
-      <div className="rounded-xl border border-dashed border-line-strong bg-surface p-6 text-sm text-muted">
-        No MCP servers registered yet.
-      </div>
+      <EmptyState
+        title="No MCP servers registered yet."
+        description="Record a tool server and the exact tool names allowed on it."
+        action={!registering ? (
+          <button ref={registerButtonRef} type="button" className={buttonPrimary} onClick={() => setRegistering(true)}>
+            Register MCP server
+          </button>
+        ) : undefined}
+      />
     )
   } else {
     content = <McpServersTable servers={servers.data} highlightId={highlightId} />
   }
 
   return (
-    <section className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex max-w-2xl flex-col gap-1.5">
-          <h1 className="m-0 text-[28px] font-semibold tracking-tight">MCP servers</h1>
-          <p className="m-0 text-[15px] text-muted">
-            Tool servers agents may use. Only the tools listed here are allowed; credentials are stored by
-            the hub and never shown again.
-          </p>
-        </div>
-        {servers.isSuccess && !registering && (
+    <PageShell>
+      <PageHeader
+        title="MCP servers"
+        description="Registered tool servers and configured tool allowlists. Credentials are stored by the hub and never shown again."
+        actions={servers.isSuccess && servers.data.length > 0 && !registering ? (
           <button ref={registerButtonRef} type="button" className={buttonPrimary} onClick={() => setRegistering(true)}>
             Register MCP server
           </button>
-        )}
-      </header>
+        ) : undefined}
+      />
       {registering && (
         <RegisterMcpServerForm
           onClose={() => setRegistering(false)}
@@ -77,13 +79,26 @@ export function McpServersPage() {
         />
       )}
       {content}
-    </section>
+    </PageShell>
   )
 }
 
 function McpServersTable({ servers, highlightId }: { servers: readonly McpServer[]; highlightId: string | null }) {
   const remove = useDeleteMcpServer()
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
+  const restoreFocusId = useRef<string | null>(null)
+  const deleteButtons = useRef(new Map<string, HTMLButtonElement>())
+
+  useEffect(() => {
+    if (confirmingId !== null || !restoreFocusId.current) return
+    deleteButtons.current.get(restoreFocusId.current)?.focus()
+    restoreFocusId.current = null
+  }, [confirmingId])
+
+  const cancelDelete = (id: string) => {
+    restoreFocusId.current = id
+    setConfirmingId(null)
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -92,17 +107,12 @@ function McpServersTable({ servers, highlightId }: { servers: readonly McpServer
           {remove.error.message}
         </p>
       )}
-      <div
-        role="region"
-        aria-label="MCP servers table"
-        tabIndex={0}
-        className="overflow-x-auto rounded-xl border border-line bg-surface"
-      >
+      <TableFrame label="MCP servers table">
         <table className="w-full min-w-[880px] border-collapse text-left text-sm">
-          <thead>
-            <tr className="border-b border-line text-xs tracking-[0.04em] text-muted uppercase">
+          <thead className="bg-[#F9F9F6]">
+            <tr className="border-b border-line text-[11px] tracking-[0.08em] text-muted uppercase">
               {HEADERS.map((header, i) => (
-                <th key={header || i} scope="col" className="px-4 py-3 font-semibold">
+                <th key={header || i} scope="col" className="px-5 py-3.5 font-semibold">
                   {header || <span className="sr-only">Actions</span>}
                 </th>
               ))}
@@ -115,7 +125,7 @@ function McpServersTable({ servers, highlightId }: { servers: readonly McpServer
                 <tr
                   key={server.id}
                   data-highlight={highlighted}
-                  className={`border-b border-line transition-colors last:border-b-0 ${highlighted ? 'bg-teal-soft' : ''}`}
+                  className={`border-b border-line transition-colors last:border-b-0 ${highlighted ? 'bg-teal-soft' : 'hover:bg-[#FAFAF7]'}`}
                 >
                   <th scope="row" className={`${cell} font-semibold`}>
                     {server.name}
@@ -133,22 +143,35 @@ function McpServersTable({ servers, highlightId }: { servers: readonly McpServer
                       ))}
                     </ul>
                   </td>
-                  <td className={`${cell} text-muted`}>{server.agents}</td>
                   <td className={`${cell} text-right`}>
                     {confirmingId === server.id ? (
-                      <button
-                        type="button"
-                        autoFocus
-                        disabled={remove.isPending}
-                        onBlur={() => setConfirmingId(null)}
-                        onClick={() => remove.mutate(server.id, { onSettled: () => setConfirmingId(null) })}
-                        aria-label={`Confirm delete ${server.name}`}
-                        className={`${buttonSecondary} border-danger px-3 text-xs text-danger`}
-                      >
-                        Confirm delete
-                      </button>
+                      <div role="group" aria-label={`Delete ${server.name}?`} className="flex justify-end gap-2 whitespace-nowrap">
+                        <button
+                          type="button"
+                          autoFocus
+                          disabled={remove.isPending}
+                          onClick={() => remove.mutate(server.id, { onSettled: () => setConfirmingId(null) })}
+                          aria-label={`Confirm delete ${server.name}`}
+                          className={`${buttonSecondary} border-danger px-3 text-xs text-danger hover:bg-[#FBE7E2]`}
+                        >
+                          {remove.isPending ? 'Deleting…' : 'Confirm delete'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={remove.isPending}
+                          onClick={() => cancelDelete(server.id)}
+                          aria-label={`Cancel delete ${server.name}`}
+                          className={`${buttonSecondary} px-3 text-xs`}
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     ) : (
                       <button
+                        ref={(node) => {
+                          if (node) deleteButtons.current.set(server.id, node)
+                          else deleteButtons.current.delete(server.id)
+                        }}
                         type="button"
                         aria-label={`Delete ${server.name}`}
                         onClick={() => {
@@ -166,7 +189,7 @@ function McpServersTable({ servers, highlightId }: { servers: readonly McpServer
             })}
           </tbody>
         </table>
-      </div>
+      </TableFrame>
     </div>
   )
 }

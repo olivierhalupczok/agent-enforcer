@@ -40,11 +40,11 @@ describe('New guardrail', () => {
 
   it('offers only templates the engine can run', async () => {
     const user = await openForm()
-    expect(within(screen.getByRole('group', { name: 'Template' })).getByRole('button', { name: 'None' })).toBeDisabled()
+    expect(within(screen.getByRole('group', { name: 'Template' })).getByRole('button', { name: 'Engine default' })).toBeDisabled()
     await user.click(engine('Moderation API'))
-    expect(templateChips()).toEqual(['None', 'Toxicity'])
+    expect(templateChips()).toEqual(['Engine default (Toxicity)', 'Toxicity'])
     await user.click(engine('Regex \\+ rules'))
-    expect(templateChips()).toEqual(['None', 'Prompt injection', 'Regex'])
+    expect(templateChips()).toEqual(['Engine default (Regex)', 'Prompt injection', 'Regex'])
   })
 
   it('offers only actions the template allows', async () => {
@@ -62,7 +62,7 @@ describe('New guardrail', () => {
     await user.click(screen.getByRole('button', { name: 'PII' }))
     await user.selectOptions(screen.getByLabelText('Action'), 'Redact')
     await user.click(engine('Moderation API'))
-    expect(screen.getByRole('button', { name: 'None' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Engine default (Toxicity)' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByLabelText('Action')).toHaveValue('block')
     expect(screen.getByLabelText('Threshold')).toBeInTheDocument()
   })

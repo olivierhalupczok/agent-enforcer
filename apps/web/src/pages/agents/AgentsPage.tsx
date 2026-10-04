@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAgents } from '../../api/agents'
 import { buttonPrimary, buttonSecondary } from '../../ui/classes'
+import { EmptyState, PageHeader, PageShell } from '../../ui/Page'
 import { AgentsTable, AgentsTableSkeleton } from './AgentsTable'
 import { RegisterAgentForm } from './RegisterAgentForm'
 
@@ -37,25 +38,26 @@ export function AgentsPage() {
     content = <AgentsTableSkeleton />
   } else if (agents.data.length === 0) {
     content = (
-      <div className="rounded-xl border border-dashed border-line-strong bg-surface p-6 text-sm text-muted">
-        No agents yet. Register your first one.
-      </div>
+      <EmptyState
+        title="No agents yet. Register your first one."
+        description="Add an A2A agent to create its guarded URL and begin applying guardrails."
+        action={!registering ? (
+          <button ref={registerButtonRef} type="button" className={buttonPrimary} onClick={() => setRegistering(true)}>
+            Register agent
+          </button>
+        ) : undefined}
+      />
     )
   } else {
     content = <AgentsTable agents={agents.data} highlightId={highlightId} />
   }
 
   return (
-    <section className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex max-w-2xl flex-col gap-1.5">
-          <h1 className="m-0 text-[28px] font-semibold tracking-tight">Agents</h1>
-          <p className="m-0 text-[15px] text-muted">
-            Proxy agents sit behind a guarded URL. Register one by its upstream URL; the hub checks it answers
-            before saving.
-          </p>
-        </div>
-        {agents.isSuccess && !registering && (
+    <PageShell>
+      <PageHeader
+        title="Agents"
+        description="Proxy agents sit behind a guarded URL. Register one by its upstream URL; the hub checks it answers before saving."
+        actions={agents.isSuccess && agents.data.length > 0 && !registering ? (
           <button
             ref={registerButtonRef}
             type="button"
@@ -64,12 +66,12 @@ export function AgentsPage() {
           >
             Register agent
           </button>
-        )}
-      </header>
+        ) : undefined}
+      />
       {registering && (
         <RegisterAgentForm onClose={() => setRegistering(false)} onRegistered={(agent) => setHighlightId(agent.id)} />
       )}
       {content}
-    </section>
+    </PageShell>
   )
 }

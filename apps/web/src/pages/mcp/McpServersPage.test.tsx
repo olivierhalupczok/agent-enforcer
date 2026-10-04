@@ -96,4 +96,20 @@ describe('MCP servers', () => {
     expect(await screen.findByText('No MCP servers registered yet.')).toBeInTheDocument()
     expect(fakeApi.mcpServers).toEqual([])
   })
+
+  it('keeps delete confirmation open on blur and restores focus when canceled', async () => {
+    const user = await open()
+    const deleteButton = screen.getByRole('button', { name: 'Delete Orders' })
+    await user.click(deleteButton)
+
+    const confirmButton = screen.getByRole('button', { name: 'Confirm delete Orders' })
+    expect(confirmButton).toHaveFocus()
+    await user.tab()
+    expect(confirmButton).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Cancel delete Orders' }))
+    expect(screen.queryByRole('button', { name: 'Confirm delete Orders' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete Orders' })).toHaveFocus()
+    expect(fakeApi.mcpServers).toHaveLength(1)
+  })
 })

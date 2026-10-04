@@ -33,6 +33,28 @@ describe('Agent deploy', () => {
 
     await user.click(section.getByRole('button', { name: 'Copy key' }))
     expect(await navigator.clipboard.readText()).toBe('ghk_test_1')
+    expect(section.getByRole('status')).toHaveTextContent('Key copied.')
+  })
+
+  it('requires confirmation before replacing a gateway key', async () => {
+    const { user, section } = await open()
+    await user.click(section.getByRole('button', { name: 'Create key' }))
+    await section.findByText('ghk_test_1')
+
+    await user.click(section.getByRole('button', { name: 'Create another key' }))
+    expect(section.getByRole('group', { name: 'Confirm gateway key replacement' })).toBeInTheDocument()
+    expect(section.getByText('Creating a key replaces the previous one; callers using it stop working.')).toBeInTheDocument()
+
+    await user.click(section.getByRole('button', { name: 'Cancel' }))
+    expect(section.queryByRole('group', { name: 'Confirm gateway key replacement' })).not.toBeInTheDocument()
+    expect(fakeApi.gatewayKeys['agent-support']).toBe('ghk_test_1')
+
+    await user.click(section.getByRole('button', { name: 'Create another key' }))
+    await user.click(within(section.getByRole('group', { name: 'Confirm gateway key replacement' })).getByRole('button', {
+      name: 'Create another key',
+    }))
+    expect(await section.findByText('ghk_test_2')).toBeInTheDocument()
+    expect(fakeApi.gatewayKeys['agent-support']).toBe('ghk_test_2')
   })
 
   it("shows the API's message when the key can't be saved", async () => {

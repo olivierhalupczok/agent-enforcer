@@ -43,12 +43,14 @@ describe('GuardrailsPage', () => {
     expect(fakeApi.guardrails.map((g) => g.id)).toEqual(['gr-injection', 'gr-toxicity'])
   })
 
-  it('cancels a pending delete when focus moves away', async () => {
+  it('keeps deletion explicit until it is canceled', async () => {
     const user = userEvent.setup()
     renderApp('/guardrails')
     await screen.findByRole('article', { name: 'PII redaction' })
     await user.click(within(card('PII redaction')).getByRole('button', { name: 'Delete' }))
     await user.tab()
+    expect(within(card('PII redaction')).getByRole('button', { name: 'Confirm delete' })).toBeInTheDocument()
+    await user.click(within(card('PII redaction')).getByRole('button', { name: 'Cancel' }))
     expect(within(card('PII redaction')).getByRole('button', { name: 'Delete' })).toBeInTheDocument()
   })
 

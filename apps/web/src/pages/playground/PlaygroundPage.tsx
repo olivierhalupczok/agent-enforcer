@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import type { RunResult, Scenario } from '../../api/playground'
 import { usePlaygroundHosts, useResetSandbox, useRunScenario, useScenarios } from '../../api/playground'
 import { buttonPrimary, buttonSecondary } from '../../ui/classes'
+import { EmptyState, PageHeader, PageShell } from '../../ui/Page'
 
 const EXPECTED_LABELS: Record<Scenario['expected'], { label: string; className: string }> = {
   blocked: { label: 'Expected: blocked', className: 'bg-[#FBE7E2] text-danger' },
@@ -11,11 +12,12 @@ const EXPECTED_LABELS: Record<Scenario['expected'], { label: string; className: 
   passes: { label: 'Expected: passes', className: 'bg-teal-soft text-teal-dark' },
 }
 
-export function PlaygroundPage() {  const scenarios = useScenarios()
+export function PlaygroundPage() {
+  const scenarios = useScenarios()
   const hosts = usePlaygroundHosts()
   const [host, setHost] = useState<string | null>(null) // null = first option once loaded
   const [results, setResults] = useState<Record<string, RunResult | 'running'>>({})
-  const [resetNote, setResetNote] = useState<string | null>(null)
+  const [resetStatus, setResetStatus] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
   const run = useRunScenario()
   const reset = useResetSandbox()
 
@@ -23,15 +25,17 @@ export function PlaygroundPage() {  const scenarios = useScenarios()
   const anyRunning = Object.values(results).some((r) => r === 'running') || reset.isPending
 
   const doReset = () => {
-    setResetNote(null)
+    setResetStatus(null)
     reset.mutate(undefined, {
-      onSuccess: (res) => setResetNote(`Sandbox restored (${res.staged.length} files re-created).`),
-      onError: (error) => setResetNote((error as { message?: string }).message ?? 'Reset failed.'),
+      onSuccess: (res) =>
+        setResetStatus({ kind: 'success', message: `Sandbox restored (${res.staged.length} files re-created).` }),
+      onError: (error) =>
+        setResetStatus({ kind: 'error', message: (error as { message?: string }).message ?? 'Reset failed.' }),
     })
   }
 
   const startRun = (scenarioId: string) => {
-    if (anyRunning) return
+    if (anyRunning || !selectedHost) return
     setResults((prev) => ({ ...prev, [scenarioId]: 'running' }))
     run.mutate(
       { scenarioId, host: selectedHost },
@@ -54,61 +58,72 @@ export function PlaygroundPage() {  const scenarios = useScenarios()
     )
   }
 
-  if (scenarios.isError || hosts.isError) {
-    return (
-      <div role="alert" className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-6">
-        <span className="text-sm">Couldn't load the playground scenarios.</span>
-        <span className="text-[13px] text-muted">
-          Is the API running? Start it with <code className="font-mono">make api</code>.
-        </span>
-        <div>
-          <button
-            type="button"
-            className={buttonSecondary}
-            onClick={() => {
-              void scenarios.refetch()
-              void hosts.refetch()
-            }}
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <section className="flex flex-col gap-5">
-      <header className="flex flex-wrap items-center gap-x-6 gap-y-2">
-        <div className="mr-auto max-w-2xl">
-          <h1 className="m-0 text-[28px] font-semibold tracking-tight">Playground</h1>
-        </div>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-semibold text-[#30343B]">Simulated host</span>
-          <select
-            aria-label="Simulated host"
-            className="min-h-11 rounded-lg border border-[#CFCFC8] bg-surface px-3 text-sm text-ink"
-            value={selectedHost}
-            onChange={(e) => setHost(e.target.value)}
-          >
-            {(hosts.data ?? []).map((h) => (
-              <option key={h.id} value={h.id}>
-                {h.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-semibold text-[#30343B]">Sandbox</span>
-          <button type="button" className={buttonSecondary} disabled={reset.isPending || anyRunning} onClick={doReset}>
-            {reset.isPending ? 'Restoring…' : 'Reset sandbox'}
-          </button>
-        </label>
-      </header>
+    <PageShell>
+      <PageHeader
+        title="Playground"
+        description="Prototype runner for predefined, sandboxed pi control-layer scenarios. Results demonstrate policy behavior and are not production evaluations."
+        actions={
+          <div className="flex w-full flex-wrap items-end gap-3 sm:w-auto">
+            <label className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-none">
+              <span className="text-xs font-semibold text-[#30343B]">Simulated host</span>
+              <select
+                aria-label="Simulated host"
+                className="min-h-11 min-w-0 rounded-lg border border-[#CFCFC8] bg-surface px-3 text-sm text-ink sm:min-w-48"
+                value={selectedHost}
+                disabled={hosts.isPending || hosts.isError || !hosts.data?.length || anyRunning}
+                onChange={(e) => {
+                  setHost(e.target.value)
+                  setResults({})
+                }}
+              >
+                {!selectedHost && <option value="">No hosts available</option>}
+                {(hosts.data ?? []).map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-semibold text-[#30343B]">Sandbox</span>
+              <button type="button" className={buttonSecondary} disabled={reset.isPending || anyRunning} onClick={doReset}>
+                {reset.isPending ? 'Restoring…' : 'Reset sandbox'}
+              </button>
+            </div>
+          </div>
+        }
+      />
 
-      {resetNote && (
-        <div role="status" className="rounded-lg border border-line bg-surface p-3 text-sm text-muted">
-          {resetNote}
+      {(scenarios.isError || hosts.isError) && (
+        <div role="alert" className="flex flex-col gap-3 rounded-xl border border-[#EFC4BC] bg-[#FBEAE6] p-4 text-sm text-danger">
+          <span>Couldn't load {scenarios.isError && hosts.isError ? 'playground scenarios or hosts' : scenarios.isError ? 'playground scenarios' : 'playground hosts'}.</span>
+          <span>Check that the API is running, then retry.</span>
+          <div>
+            <button
+              type="button"
+              className={buttonSecondary}
+              onClick={() => {
+                if (scenarios.isError) void scenarios.refetch()
+                if (hosts.isError) void hosts.refetch()
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+
+      {resetStatus && (
+        <div
+          role={resetStatus.kind === 'error' ? 'alert' : 'status'}
+          className={`rounded-lg border p-3 text-sm ${
+            resetStatus.kind === 'error'
+              ? 'border-[#EFC4BC] bg-[#FBEAE6] text-danger'
+              : 'border-[#BFE3D2] bg-[#EAF6F0] text-[#0B5A51]'
+          }`}
+        >
+          {resetStatus.message}
         </div>
       )}
 
@@ -120,26 +135,28 @@ export function PlaygroundPage() {  const scenarios = useScenarios()
         and relax the matching rule (the hint on each card says which), so the scenario passes. Refresh the environment if needed.
       </div>
 
-      {!scenarios.data ? (
+      {scenarios.isPending ? (
         <div aria-busy="true" className="grid gap-4 lg:grid-cols-2">
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="h-40 animate-pulse rounded-xl border border-line bg-surface" />
           ))}
         </div>
-      ) : (
+      ) : scenarios.data?.length === 0 ? (
+        <EmptyState title="No demo scenarios available" description="No predefined scenarios were returned by the API." />
+      ) : scenarios.data ? (
         <div className="grid gap-4 lg:grid-cols-2">
           {scenarios.data.map((scenario) => (
             <ScenarioCard
               key={scenario.id}
               scenario={scenario}
-              disabled={anyRunning || run.isPending}
+              disabled={anyRunning || run.isPending || !selectedHost}
               result={results[scenario.id]}
               onRun={() => startRun(scenario.id)}
             />
           ))}
         </div>
-      )}
-    </section>
+      ) : null}
+    </PageShell>
   )
 }
 
