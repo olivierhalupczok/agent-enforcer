@@ -73,6 +73,8 @@ class Audit:
 class GuardedReply:
     body: a2a.Json  # the JSON-RPC response
     raw: bytes | None = None  # the agent's own bytes, when nothing was changed
+    status_code: int = 200  # with `raw`: the agent's own HTTP status and content type
+    media_type: str = "application/json"
     trace: list[TraceEntry] = field(default_factory=list)
 
 
@@ -236,7 +238,13 @@ async def send_guarded(
     if not guarded or "error" in reply:
         # No guardrails, or the agent's own JSON-RPC error: passed through byte for byte.
         await _record_events(audit, context_id, inbound.trace, policy)
-        return GuardedReply(reply, raw=response.content, trace=inbound.trace)
+        return GuardedReply(
+            reply,
+            raw=response.content,
+            status_code=response.status_code,
+            media_type=response.headers.get("content-type", "application/json"),
+            trace=inbound.trace,
+        )
 
     # --- output guardrails ---
     result = reply["result"]

@@ -121,5 +121,7 @@ async def forward_to_agent(
         raw_body=None if stripped else body,
     )
     if reply.raw is not None:  # the agent's answer, byte for byte
-        return Response(content=reply.raw, media_type="application/json")
+        return Response(
+            content=reply.raw, status_code=reply.status_code, media_type=reply.media_type
+        )
     return JSONResponse(reply.body)
