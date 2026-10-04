@@ -21,6 +21,7 @@ from app.bindings.resolve import resolve
 from app.gateway import service as gateway_service
 from app.gateway.policy import get_policy_loader
 from app.gateway.resolver import UpstreamTarget, get_agent_resolver
+from app.guardrails.models import Guardrail
 from app.main import app
 from app.store import store
 from fastapi.testclient import TestClient
@@ -203,6 +204,29 @@ def test_warning_is_audited_and_the_reply_still_arrives() -> None:
     assert answer["result"]["message"]["parts"] == [{"text": "Echo: Is MegaMart cheaper?"}]
     [event] = MEMORY.events
     assert (event.action, event.stage, event.rule_id) == ("warn", "output", "gr-competitors")
+
+
+def test_response_relevance_blocks_test_chat_output_and_is_audited(agent: Agent) -> None:
+    store.guardrails["gr-relevance"] = Guardrail.model_validate(
+        {
+            "id": "gr-relevance",
+            "name": "Response relevance",
+            "engine": "library",
+            "stages": ["output"],
+            "action": "block",
+            "config": {"template": "response_relevance", "required_terms": ["tracking"]},
+        }
+    )
+    attach("gr-relevance", 0)
+
+    answer = chat("Where is my order?")
+
+    task = answer["result"]["task"]
+    assert task["status"]["state"] == "TASK_STATE_REJECTED"
+    assert hub_of(answer)["stage"] == "output"
+    assert agent.calls == 1
+    [event] = MEMORY.events
+    assert (event.action, event.stage, event.rule_id) == ("block", "output", "gr-relevance")
 
 
 def test_audit_never_contains_the_message_text() -> None:

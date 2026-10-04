@@ -20,7 +20,7 @@ from pydantic.alias_generators import to_camel
 
 from app.bindings.models import EffectiveGuardrail, Source
 from app.gateway.a2a import Json, checked_text, text_parts
-from app.guardrails.evaluate import evaluate
+from app.guardrails.evaluate import GuardrailContext, evaluate
 from app.guardrails.models import DryRunResult, Engine, Guardrail, Stage
 from app.store import store
 
@@ -30,15 +30,27 @@ Verdict = Literal["pass", "block", "redact", "warn"]
 class GuardrailEngine(Protocol):
     """Runs one guardrail on one text (the T-04 engine interface). E-02 brings real engines."""
 
-    def check(self, guardrail: Guardrail, text: str, stage: Stage) -> DryRunResult: ...
+    def check(
+        self,
+        guardrail: Guardrail,
+        text: str,
+        stage: Stage,
+        context: GuardrailContext | None = None,
+    ) -> DryRunResult: ...
 
 
 class LocalEngine:
     """Stand-in until E-02: the dry-run checks (regex, PII and signatures are real; LLM judge
     and moderation are heuristics and say so with simulated=True)."""
 
-    def check(self, guardrail: Guardrail, text: str, stage: Stage) -> DryRunResult:
-        return evaluate(guardrail, text, list(store.signatures.values()))
+    def check(
+        self,
+        guardrail: Guardrail,
+        text: str,
+        stage: Stage,
+        context: GuardrailContext | None = None,
+    ) -> DryRunResult:
+        return evaluate(guardrail, text, list(store.signatures.values()), context)
 
 
 class TraceEntry(BaseModel):
@@ -87,11 +99,22 @@ def _blocked(rule: EffectiveGuardrail, reason: str) -> str:
     return f'Blocked by guardrail "{rule.guardrail.name}": {reason}'
 
 
+def _check(
+    engine: GuardrailEngine,
+    guardrail: Guardrail,
+    text: str,
+    stage: Stage,
+    context: GuardrailContext | None,
+) -> DryRunResult:
+    return engine.check(guardrail, text, stage, context)
+
+
 def run_stage(
     rules: Sequence[EffectiveGuardrail],
     stage: Stage,
     holders: list[Json],
     engine: GuardrailEngine,
+    context: GuardrailContext | None = None,
 ) -> StageOutcome:
     """Run `rules` on the messages/artifacts in `holders`; redactions change them in place."""
     trace: list[TraceEntry] = []
@@ -100,13 +123,13 @@ def run_stage(
         started = time.perf_counter()
         try:
             text, unchecked = checked_text(holders)
-            result = engine.check(rule.guardrail, text, stage)
+            result = _check(engine, rule.guardrail, text, stage, context)
             redacted: list[str] | None = None
             if result.result == "redact":
                 # Redact part by part, so each text part keeps its place in the message.
                 redacted = []
                 for part in text_parts(holders):
-                    piece = engine.check(rule.guardrail, part["text"], stage)
+                    piece = _check(engine, rule.guardrail, part["text"], stage, context)
                     changed = piece.result == "redact" and piece.output is not None
                     redacted.append(piece.output if changed and piece.output else part["text"])
         except Exception as error:  # an engine bug, a pattern timeout, a model outage
@@ -115,7 +138,7 @@ def run_stage(
                 reason = f"{failed}; it is mandatory, so the call is blocked (fail closed)"
                 trace.append(_entry(rule, stage, "block", reason, started))
                 return StageOutcome(trace=trace, blocked_reason=_blocked(rule, reason))
-            reason = f"{failed}; not enforced"
+            reason = f"{failed}; optional rule was not enforced"
             trace.append(_entry(rule, stage, "warn", reason, started))
             continue
 
@@ -126,6 +149,9 @@ def run_stage(
         if unchecked:
             reason += f" ({unchecked} file part(s) not checked)"
         verdict: Verdict = result.result
+        if stage == "output" and verdict == "pass" and not text and unchecked:
+            verdict = "warn"
+            reason = f"No scannable text; {unchecked} file part(s) not checked"
         # llm_judge / moderation are keyword heuristics. A guessed block would look like a
         # real refusal, so it is downgraded to a warning that says so.
         if verdict == "block" and result.simulated:

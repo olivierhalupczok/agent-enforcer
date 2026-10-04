@@ -25,6 +25,7 @@ from app.audit.recorder import AuditRecorder
 from app.bindings.models import EffectivePolicy
 from app.gateway import a2a
 from app.gateway.pipeline import (
+    GuardrailContext,
     GuardrailEngine,
     LocalEngine,
     StageOutcome,
@@ -257,7 +258,14 @@ async def send_guarded(
 
     # --- output guardrails ---
     result = reply["result"]
-    outbound = run_stage(policy.output, "output", a2a.reply_holders(result), engine)
+    input_text, _ = a2a.checked_text([message])
+    outbound = run_stage(
+        policy.output,
+        "output",
+        a2a.reply_holders(result),
+        engine,
+        GuardrailContext(input_text=input_text),
+    )
     trace = inbound.trace + outbound.trace
     await _record_events(audit, context_id, trace, policy)
     if outbound.blocked_reason is not None:

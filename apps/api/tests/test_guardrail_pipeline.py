@@ -19,7 +19,7 @@ from app.bindings.models import Binding, EffectivePolicy
 from app.bindings.resolve import resolve
 from app.gateway import router as gateway_router
 from app.gateway import service as gateway_service
-from app.gateway.pipeline import LocalEngine, run_stage
+from app.gateway.pipeline import GuardrailContext, LocalEngine, run_stage
 from app.gateway.policy import SupabasePolicyLoader, get_policy_loader
 from app.gateway.resolver import UpstreamTarget, get_agent_resolver
 from app.guardrails.models import DryRunResult, Guardrail, Stage
@@ -75,7 +75,14 @@ class StubEngine:
         self.verdicts = verdicts
         self.seen: list[tuple[str, str]] = []
 
-    def check(self, guardrail: Guardrail, text: str, stage: Stage) -> DryRunResult:
+    def check(
+        self,
+        guardrail: Guardrail,
+        text: str,
+        stage: Stage,
+        context: GuardrailContext | None = None,
+    ) -> DryRunResult:
+        del context
         self.seen.append((guardrail.id, text))
         verdict = self.verdicts.get(guardrail.id, "pass")
         if verdict == "error":
@@ -196,7 +203,9 @@ def test_an_optional_guardrail_that_errors_is_not_enforced() -> None:
 
     assert outcome.blocked_reason is None
     assert [e.verdict for e in outcome.trace] == ["warn", "pass"]
-    assert outcome.trace[0].reason == "Guardrail failed (RuntimeError); not enforced"
+    assert (
+        outcome.trace[0].reason == "Guardrail failed (RuntimeError); optional rule was not enforced"
+    )
 
 
 def test_file_parts_are_not_checked_and_the_trace_says_so() -> None:
@@ -218,6 +227,127 @@ def test_data_parts_are_checked_as_json() -> None:
     run_stage(policy(rule("pii")).input, "input", [message], engine)
 
     assert engine.seen == [("pii", 'hello\n{"email": "ann@example.com"}')]
+
+
+def test_output_file_only_parts_warn_instead_of_silent_pass() -> None:
+    artifact = {
+        "artifactId": "a-1",
+        "parts": [{"url": "https://files.example.com/a.pdf", "mediaType": "application/pdf"}],
+    }
+
+    outcome = run_stage(
+        policy(rule("pii", stages=["output"])).output,
+        "output",
+        [artifact],
+        StubEngine({}),
+    )
+
+    assert outcome.blocked_reason is None
+    assert outcome.trace[0].verdict == "warn"
+    assert outcome.trace[0].reason == "No scannable text; 1 file part(s) not checked"
+
+
+def test_response_relevance_blocks_unrelated_output() -> None:
+    guardrail = Guardrail.model_validate(
+        {
+            "id": "relevance",
+            "name": "Response relevance",
+            "engine": "library",
+            "stages": ["output"],
+            "action": "block",
+            "config": {"template": "response_relevance", "min_overlap_score": 0.5},
+        }
+    )
+    reply = user_message("Bananas are yellow.")
+
+    outcome = run_stage(
+        policy(guardrail).output,
+        "output",
+        [reply],
+        LocalEngine(),
+        GuardrailContext(input_text="Where is my order 48213?"),
+    )
+
+    assert outcome.blocked_reason == (
+        'Blocked by guardrail "Response relevance": Response relevance score 0.00 below 0.50'
+    )
+    assert outcome.trace[0].verdict == "block"
+
+
+def test_response_relevance_passes_related_output() -> None:
+    guardrail = Guardrail.model_validate(
+        {
+            "id": "relevance",
+            "name": "Response relevance",
+            "engine": "library",
+            "stages": ["output"],
+            "action": "block",
+            "config": {"template": "response_relevance", "min_overlap_score": 0.4},
+        }
+    )
+    reply = user_message("Order 48213 is out for delivery.")
+
+    outcome = run_stage(
+        policy(guardrail).output,
+        "output",
+        [reply],
+        LocalEngine(),
+        GuardrailContext(input_text="Where is my order 48213?"),
+    )
+
+    assert outcome.blocked_reason is None
+    assert [(e.guardrail_id, e.verdict, e.reason) for e in outcome.trace] == [
+        ("relevance", "pass", "No match")
+    ]
+
+
+def test_response_relevance_required_terms_can_block() -> None:
+    guardrail = Guardrail.model_validate(
+        {
+            "id": "relevance",
+            "name": "Response relevance",
+            "engine": "library",
+            "stages": ["output"],
+            "action": "block",
+            "config": {"template": "response_relevance", "required_terms": ["tracking"]},
+        }
+    )
+
+    outcome = run_stage(
+        policy(guardrail).output,
+        "output",
+        [user_message("Your order ships tomorrow.")],
+        LocalEngine(),
+        GuardrailContext(input_text="Where is my order?"),
+    )
+
+    assert outcome.blocked_reason == (
+        'Blocked by guardrail "Response relevance": Missing required response term(s): tracking'
+    )
+
+
+def test_response_relevance_warn_does_not_block() -> None:
+    guardrail = Guardrail.model_validate(
+        {
+            "id": "relevance",
+            "name": "Response relevance",
+            "engine": "library",
+            "stages": ["output"],
+            "action": "warn",
+            "config": {"template": "response_relevance", "required_terms": ["tracking"]},
+        }
+    )
+
+    outcome = run_stage(
+        policy(guardrail).output,
+        "output",
+        [user_message("Bananas are yellow.")],
+        LocalEngine(),
+        GuardrailContext(input_text="Where is my order?"),
+    )
+
+    assert outcome.blocked_reason is None
+    assert outcome.trace[0].verdict == "warn"
 
 
 # --- inside the gateway ------------------------------------------------------------------------
@@ -328,6 +458,29 @@ def test_an_output_block_replaces_the_agents_answer() -> None:
     assert task["status"]["state"] == "TASK_STATE_REJECTED"
     assert task["metadata"]["guardrailHub"]["stage"] == "output"
     assert "jan.kowalski" not in json.dumps(task)  # nothing of the agent's reply leaks
+
+
+def test_response_relevance_blocks_unrelated_gateway_reply() -> None:
+    relevance = Guardrail.model_validate(
+        {
+            "id": "relevance",
+            "name": "Response relevance",
+            "engine": "library",
+            "stages": ["output"],
+            "action": "block",
+            "config": {"template": "response_relevance", "required_terms": ["tracking"]},
+        }
+    )
+    use(policy(relevance), LocalEngine())
+
+    task = say("Where is my order?")["result"]["task"]
+
+    assert task["status"]["state"] == "TASK_STATE_REJECTED"
+    hub = task["metadata"]["guardrailHub"]
+    assert hub["stage"] == "output"
+    assert [(e["guardrailId"], e["verdict"]) for e in hub["trace"]] == [("relevance", "block")]
+    [event] = MEMORY.events
+    assert (event.rule_id, event.action, event.stage) == ("relevance", "block", "output")
 
 
 def test_output_redaction_with_the_real_pii_guardrail() -> None:

@@ -6,6 +6,7 @@ no model behind them yet, so their verdicts are keyword heuristics marked simula
 
 import re
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 import regex
 
@@ -18,6 +19,7 @@ from app.guardrails.models import (
     PiiConfig,
     PromptInjectionConfig,
     RegexConfig,
+    ResponseRelevanceConfig,
     TopicConfig,
     ToxicityConfig,
 )
@@ -41,6 +43,13 @@ class PatternTimeoutError(Exception):
     """A user-supplied pattern ran past PATTERN_TIMEOUT_S."""
 
 
+@dataclass(frozen=True)
+class GuardrailContext:
+    """Extra request context for checks that compare input with output."""
+
+    input_text: str | None = None
+
+
 def _search(pattern: str, text: str) -> bool:
     try:
         return regex.search(pattern, text, timeout=PATTERN_TIMEOUT_S) is not None
@@ -58,6 +67,38 @@ def _replace_literal(pattern: str, replacement: str, text: str) -> str:
 
 
 TOXIC_WORDS = ["idiot", "stupid", "moron", "shut up", "hate you", "useless"]
+STOP_WORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "by",
+    "can",
+    "do",
+    "for",
+    "from",
+    "how",
+    "i",
+    "in",
+    "is",
+    "it",
+    "me",
+    "my",
+    "of",
+    "on",
+    "or",
+    "please",
+    "the",
+    "to",
+    "what",
+    "where",
+    "with",
+    "you",
+    "your",
+}
 
 
 def _luhn_ok(candidate: str) -> bool:
@@ -102,8 +143,37 @@ def _pii(config: PiiConfig, text: str) -> tuple[list[str], str]:
     return found, redacted
 
 
+def _terms(text: str) -> set[str]:
+    words = re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]{2,}", text.casefold())
+    return {word for word in words if word not in STOP_WORDS}
+
+
+def _response_relevance(
+    config: ResponseRelevanceConfig, text: str, context: GuardrailContext | None
+) -> str | None:
+    missing = [term for term in config.required_terms if term.casefold() not in text.casefold()]
+    if missing:
+        return f"Missing required response term(s): {', '.join(missing)}"
+
+    prompt = context.input_text if context is not None else None
+    if prompt is None:
+        return "Missing original user message for relevance check"
+
+    requested = _terms(prompt)
+    if not requested:
+        return None
+    answered = _terms(text)
+    score = len(requested & answered) / len(requested)
+    if score < config.min_overlap_score:
+        return f"Response relevance score {score:.2f} below {config.min_overlap_score:.2f}"
+    return None
+
+
 def evaluate(
-    rule: GuardrailRule, text: str, signatures: Sequence[InjectionSignature]
+    rule: GuardrailRule,
+    text: str,
+    signatures: Sequence[InjectionSignature],
+    context: GuardrailContext | None = None,
 ) -> DryRunResult:
     simulated = rule.engine in ("llm_judge", "moderation")
     lowered = text.lower()
@@ -143,6 +213,8 @@ def evaluate(
         shared = [w for w in prompt_words if w in lowered]
         if shared:
             reason = f"Shares wording with the judge prompt: {', '.join(shared)}"
+    elif isinstance(config, ResponseRelevanceConfig):
+        reason = _response_relevance(config, text, context)
 
     if reason is None:
         return DryRunResult(
