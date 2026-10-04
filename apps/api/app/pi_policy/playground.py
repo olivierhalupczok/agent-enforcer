@@ -25,7 +25,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from app.core.config import settings
-from app.pi_policy.state import ensure_state, pi_command, pi_env
+from app.pi_policy.state import _PI_NPM_CANDIDATES, ensure_state, pi_command, pi_env
 
 SANDBOX_DIR = "/tmp/pi-demo-sandbox"
 GLOBAL_HOST = "playground-global"  # deliberately absent from any policy "agents" map
@@ -218,9 +218,11 @@ def stage_sandbox() -> list[str]:
 def _pi_command() -> list[str]:
     resolved = pi_command()
     if resolved is None:
+        candidates = [str(c / "dist" / "bundle" / "cli.js") for c in _PI_NPM_CANDIDATES]
         raise PlaygroundError(
-            "The 'pi' CLI is not available. Install it (npm i @earendil-works/pi-coding-agent) "
-            "or set PI_COMMAND."
+            "The 'pi' CLI is not available in this environment. "
+            f"Looked for: node_modules bundles at {candidates}, 'pi' on PATH, PI_COMMAND unset. "
+            "Install with: npm i @earendil-works/pi-coding-agent"
         )
     return resolved
 

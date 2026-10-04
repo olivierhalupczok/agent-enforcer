@@ -22,14 +22,17 @@ from app.core.config import settings
 _STATE_DIR = Path(settings.POLICY_PATH).parent
 _VERCEL = Path("/tmp/.vercel").exists() or bool(os.environ.get("VERCEL"))
 
-# npm package layout: node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js
-_PI_NPM_DIR = (
+# npm package layout: node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js.
+# Local: apps/api/node_modules. Vercel bundle: node_modules is at the bundle root
+# (/var/task/node_modules), so check both.
+_PI_NPM_CANDIDATES = (
+    Path(settings.REPO_ROOT) / "node_modules" / "@earendil-works" / "pi-coding-agent",
     Path(settings.REPO_ROOT)
     / "apps"
     / "api"
     / "node_modules"
     / "@earendil-works"
-    / "pi-coding-agent"
+    / "pi-coding-agent",
 )
 
 
@@ -70,12 +73,13 @@ def pi_command() -> list[str] | None:
     """pi as an argv list: PI_COMMAND override, npm-installed cli.js, then PATH."""
     if settings.PI_COMMAND:
         return settings.PI_COMMAND.split()
-    bundled = _PI_NPM_DIR / "dist" / "bundle" / "cli.js"
-    if bundled.is_file():
-        node = shutil.which("node")
-        if node is None:
-            return None
-        return [node, str(bundled)]
+    for pkg_dir in _PI_NPM_CANDIDATES:
+        bundled = pkg_dir / "dist" / "bundle" / "cli.js"
+        if bundled.is_file():
+            node = shutil.which("node")
+            if node is None:
+                return None
+            return [node, str(bundled)]
     pi = shutil.which("pi")
     return [pi] if pi else None
 
