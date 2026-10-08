@@ -37,7 +37,7 @@ const { buttonPrimary, buttonSecondary, inputClass, badgeClass, pillClass } = wi
 
 ## Page anatomy
 
-Every page is `PageShell` > `PageHeader` > content. Lists show `LoadingRows` while loading, `EmptyState` when empty, and a `<table>` inside `TableFrame` otherwise. `LiveBadge` goes in `PageHeader` `actions` for pages with live updates. A status pill beside the title goes in `PageHeader` `badge` (agents: `bg-warn-bg text-warn-fg` "Setup · 2 of 5" until live, then `bg-teal-soft text-teal-dark` "Live"). Inside `Layout`, `useToast()` returns a function that shows a short bottom-right confirmation (e.g. `toast('Guarded URL copied.')`).
+Every page is `PageShell` > `PageHeader` > content. Lists show `LoadingRows` while loading, `EmptyState` when empty, and a `<table>` inside `TableFrame` otherwise. `LiveBadge` goes in `PageHeader` `actions` for pages with live updates. A status pill beside the title goes in `PageHeader` `badge` (agents: `bg-warn-bg text-warn-fg` "Setup · 2 of 5" until live, then `bg-teal-soft text-teal-dark` "Live"). Inside `Layout`, `useToast()` returns a function that shows a short top-right confirmation (e.g. `toast('Guarded URL copied.')`).
 
 ```jsx
 const { PageShell, PageHeader, TableFrame, buttonPrimary } = window.GuardrailHub
