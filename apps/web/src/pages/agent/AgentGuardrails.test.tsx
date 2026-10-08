@@ -147,6 +147,14 @@ describe('Agent guardrails step (bindings)', () => {
     expect(output.getByText('Redact')).toBeInTheDocument()
   })
 
+  it('says when the library has nothing to attach', async () => {
+    fakeApi.guardrails = fakeApi.guardrails.filter((g) => g.is_mandatory)
+    await open()
+    expect(
+      within(library()).getByText('The library has no guardrails to attach yet. Create one, then attach it here.'),
+    ).toBeInTheDocument()
+  })
+
   it('falls back when the API has no bindings endpoint', async () => {
     fakeApi.bindingsSupported = false
     renderApp('/agents/agent-support/guardrails')
