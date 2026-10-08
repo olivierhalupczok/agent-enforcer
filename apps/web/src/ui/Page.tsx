@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react'
 
+/** Page container: centres content at max 1480px and stacks sections with a 28px gap. Wrap every page in it. */
 export function PageShell({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <section className={`mx-auto flex w-full max-w-[1480px] flex-col gap-7 ${className}`}>{children}</section>
 }
 
+/** Page title row with optional description, meta line and right-aligned actions; ends in a bottom rule. */
 export function PageHeader({
   title,
   description,
@@ -27,6 +29,7 @@ export function PageHeader({
   )
 }
 
+/** Dashed placeholder card with the shield icon, shown when a list has no items yet; optional call to action. */
 export function EmptyState({
   title,
   description,
@@ -49,6 +52,7 @@ export function EmptyState({
   )
 }
 
+/** Skeleton table rows shown while a list loads; `label` is announced to screen readers. */
 export function LoadingRows({ label, count = 3 }: { label: string; count?: number }) {
   return (
     <div role="status" aria-label={label} className="overflow-hidden rounded-xl border border-line bg-surface">
@@ -65,6 +69,7 @@ export function LoadingRows({ label, count = 3 }: { label: string; count?: numbe
   )
 }
 
+/** Bordered, horizontally scrollable region that wraps a data `<table>`; `label` names the region. */
 export function TableFrame({ label, children, className = '' }: { label: string; children: ReactNode; className?: string }) {
   return (
     <div

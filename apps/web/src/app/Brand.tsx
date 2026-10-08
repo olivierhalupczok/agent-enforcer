@@ -2,6 +2,7 @@ interface BrandProps {
   subtitle?: string
 }
 
+/** Guardrail Hub logo lockup (shield mark, name, subtitle). White text: place it on the dark sidebar. */
 export function Brand({ subtitle = 'Acme workspace' }: BrandProps) {
   return (
     <div className="flex items-center gap-2.5 px-2">
