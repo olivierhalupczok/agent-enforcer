@@ -10,29 +10,20 @@ Quick guardrails showcase:
 https://github.com/user-attachments/assets/ee1e1934-8652-417a-a219-bddbe61ccb2c
 
 
-AI Control Layer: govern AI agents with one central policy, watch every rule fire live, and edit the policy without restarting anything.
+AI Control Layer: put guardrails in front of any A2A agent, watch every rule fire live, and change them without redeploying the agent.
 
 ## Tutorial
 
-Try it on the [live app](https://hackyeah-2026-theta.vercel.app) or [run it locally](#first-time-setup). The tabs at the top of the sidebar switch between the two contexts.
+Try it on the [live app](https://hackyeah-2026-theta.vercel.app) or [run it locally](#first-time-setup). Each agent has its own workspace that walks you through setup.
 
-**Agent Wrapped**: put guardrails in front of any A2A agent.
-
-| #   | Go to                          | Do this                                                                        |
-| --- | ------------------------------ | ------------------------------------------------------------------------------ |
-| 1   | **Agents** → **Register agent** | Paste an A2A agent URL. The hub reads its Agent Card                           |
-| 2   | **Guardrails** → **New guardrail** | Pick an engine and a template (PII, injection, topics…), a stage and an action |
-| 3   | Agent page → **Deploy**        | Attach guardrails, deploy, and copy the guarded URL and gateway key           |
-| 4   | **Test chat**                  | Pick the agent, send a message or a scenario, and read the trace. **Flag reply** if it's wrong |
-| 5   | **Sessions**, **Audit log**, **Security** | See usage against caps and every block or redaction, or **Run scan** to probe the agent |
-
-**Agent Integrated**: control pi coding agents with one live policy.
-
-| #   | Go to          | Do this                                                                       |
-| --- | -------------- | ----------------------------------------------------------------------------- |
-| 1   | **Playground** | Run a scenario (a banned command, a blocked file, a page with an injection)   |
-| 2   | **Policies**   | Turn off the rule that blocked it, save, and run the scenario again: it passes |
-| 3   | **Incidents**  | Every block, redaction and injection, with injection sources auto-banned     |
+| #   | Go to                                   | Do this                                                                          |
+| --- | --------------------------------------- | -------------------------------------------------------------------------------- |
+| 1   | **Agents** → **Register agent**         | Paste an A2A agent URL. The hub reads its Agent Card and opens the agent's setup |
+| 2   | Agent → **Guardrails**                  | Attach checks from the library (PII, injection, topics…) and order them          |
+| 3   | Agent → **MCP tools** (optional)        | Grant tool servers and pick which tools the agent may call                       |
+| 4   | Agent → **Test**                        | Send a message or a scenario through the guarded pipeline and read the trace     |
+| 5   | Agent → **Go live**                     | Create a gateway key and copy the guarded URL                                     |
+| 6   | Agent → **Activity**, **Audit log**, **Security** | See sessions and every block or redaction, or **Run scan** to probe the agent |
 
 | Path               | What it is                            | Tooling                 |
 | ------------------ | ------------------------------------- | ----------------------- |
@@ -43,12 +34,8 @@ Try it on the [live app](https://hackyeah-2026-theta.vercel.app) or [run it loca
 | `apps/agents`      | Demo A2A agents                       | Python, standalone      |
 | `apps/test-agent`  | Deterministic A2A test agent          | Python, uv workspace    |
 | `packages/core`    | Shared Python code for API and CLI    | Python, uv workspace    |
-| `packages/pi-control-layer` | pi extension that enforces the policy | TypeScript, loaded by pi |
 
-The panel has two contexts, switched with the tabs at the top of the sidebar:
-
-- **Agent Wrapped**: the control room. Sessions, approvals, agents, guardrails, audit log, MCP servers, evaluators, security scan, test chat.
-- **Agent Integrated**: the pi harness integration. Playground (run safe scenarios against the live policy), Policies (edit the policy file), Incidents (every negative rule event), Sessions (pi session inventory).
+The panel's sidebar has **Agents** (each agent's setup and activity), a **Library** (guardrails and MCP servers shared by all agents) and **Monitor** pages (sessions, audit log, security scan across all agents).
 
 ## Prerequisites
 
@@ -60,7 +47,6 @@ Install once (Linux, macOS or WSL):
 | uv      | any  | `curl -LsSf https://astral.sh/uv/install.sh \| sh`              |
 | Node.js | 22+     | via [nvm](https://github.com/nvm-sh/nvm): `nvm install 22`       |
 | pnpm    | 12.8.1  | `corepack enable` (pinned in `apps/web/package.json`)            |
-| pi      | 0.85+   | see the [pi docs](https://pi.dev); playground scenarios need it  |
 | make    | any     | `sudo apt install make` (or use `just`, see below)               |
 
 You do not need to install Python yourself: uv downloads the version pinned in `.python-version` (3.12) automatically.
@@ -84,11 +70,9 @@ make api        # API on :8000, auto-reload
 make web        # panel on :5173
 ```
 
-Open http://localhost:5173 and follow the [tutorial](#tutorial). Playground scenarios run in `/tmp/pi-demo-sandbox` with fake credentials; nothing outside the sandbox is touched.
+Open http://localhost:5173 and follow the [tutorial](#tutorial).
 
-The first scenario run seeds the policy and sandbox automatically; `make seed-sandbox` re-stages the demo files by hand.
-
-The Agent Wrapped context needs a Supabase database for the agents pages:
+The agents pages need a Supabase database:
 
 ```bash
 make supabase        # start local Supabase, apply migrations, write env files
@@ -104,43 +88,12 @@ make supabase-stop   # stop it (data kept in Docker volumes)
 | `make landing`      | Astro landing page on :4321                     |
 | `make cli`          | CLI help (`uv run acme`)                        |
 | `make test-agent`   | Deterministic A2A test agent                    |
-| `make seed-sandbox` | Re-stage the playground sandbox in `/tmp`        |
 | `make lint`         | ruff lint + format check + mypy                 |
 | `make test`         | pytest (root workspace + API project)           |
 | `make supabase`     | Local Supabase + env files                      |
 | `make supabase-stop`| Stop local Supabase                             |
 
 If you prefer [just](https://github.com/casey/just), a `justfile` with the same commands sits next to the Makefile (`just api`, `just web`, ...).
-
-## How the pieces fit - Agent Integrated (pi harness integration)
-
-```mermaid
-flowchart LR
-    admin["Admin"]
-    panel["Control panel"]
-    api["API :8000"]
-    policy[("Central policy\n.pi/policy.json")]
-    incidents[("Incident log\n.pi/incidents.json")]
-    subgraph host["Host running the agent"]
-        user["Employee"]
-        pi["pi agent"]
-        ext["Control layer extension"]
-    end
-    work["Real work: bash, files, fetches"]
-
-    admin -- "decides what agents\nmay run, live" --> panel
-    panel -- "edit rules" --> api
-    panel -- "review what fired" --> incidents
-    api -- "validates against schema,\natomic write, backup" --> policy
-    policy -- "hot-reload, no restart" --> ext
-    user -- "prompts" --> pi
-    pi -- "every tool call" --> ext
-    ext -- "allow, block, redact,\napproval" --> work
-    ext -- "log every negative event,\nauto-ban the source" --> incidents
-    incidents -- "new rules visible\non the Policies page" --> policy
-```
-
-How it works in production: employees run pi agents on their machines. An admin decides what those agents may do, from the control panel, while they run. The policy reaches every host without a restart; the agent picks up a change within a second of the save. When a fetched source carries a prompt injection, the control layer flags it, records the incident, and bans that source on its own. The admin sees each event as it lands and can adjust any rule from the same page.
 
 All Python code shares one `uv.lock` and one `.venv` at the repo root, except the API which is a standalone uv project (`apps/api`). The web app and landing page are pnpm projects.
 
@@ -173,7 +126,7 @@ cd apps/web && pnpm lint && pnpm build
 
 ## Deployment
 
-The web panel and the landing page deploy to Vercel as separate projects. The API deploys from `apps/api` (set the project's Root Directory to `apps/api`); its build step vendors the pi CLI and a node binary into the function bundle, so the playground works on serverless. Environment variables the API expects: `ANTHROPIC_API_KEY` (model access for the pi agent and the judge engine), `SUPABASE_URL`, `SUPABASE_KEY`, and `PLAYGROUND_BASE_URL` set to the API's own public URL.
+The web panel and the landing page deploy to Vercel as separate projects. The API deploys from `apps/api` (set the project's Root Directory to `apps/api`); its build step exports `uv.lock` to `requirements.txt`. Environment variables the API expects: `ANTHROPIC_API_KEY` (model access for the judge engine), `SUPABASE_URL` and `SUPABASE_KEY`.
 
 ## CI
 
