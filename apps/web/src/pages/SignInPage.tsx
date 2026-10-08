@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router'
 import { homeFor } from '../app/nav'
-import { useMode } from '../app/mode'
 import { useRole } from '../app/role'
 import { useAuth } from '../auth/context'
 import { buttonPrimary, inputClass } from '../ui/classes'
@@ -22,8 +21,7 @@ export function SignInPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
-  const { mode } = useMode()
-  const target = state.from ?? homeFor(role, mode)
+  const target = state.from ?? homeFor(role)
   const notice = state.notice ?? authNotice
 
   if (session) return <Navigate to={target} replace />

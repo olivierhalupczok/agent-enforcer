@@ -7,7 +7,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { apiPath } from '../api/client'
 import { AppRoutes } from '../app/AppRoutes'
 import { RoleProvider } from '../app/RoleProvider'
-import { ModeProvider } from '../app/ModeProvider'
 import { DEMO_EMAIL, DEMO_PASSWORD, TEST_TOKEN } from '../test/fakeAuth'
 import { renderApp } from '../test/renderApp'
 import { server } from '../test/server'
@@ -28,9 +27,7 @@ function renderUnconfigured() {
       <MemoryRouter initialEntries={['/sessions']}>
         <AuthProvider client={null}>
           <RoleProvider>
-            <ModeProvider>
-              <AppRoutes />
-            </ModeProvider>
+            <AppRoutes />
           </RoleProvider>
         </AuthProvider>
       </MemoryRouter>
@@ -95,7 +92,7 @@ describe('sign-in', () => {
 
   it('redirects signed-in users away from /sign-in', () => {
     renderApp('/sign-in')
-    expect(location()).toBe('/sessions')
+    expect(location()).toBe('/agents')
   })
 
   it('tells production visitors the deployment lacks Supabase settings', () => {
@@ -116,9 +113,7 @@ describe('sign-in', () => {
         <MemoryRouter initialEntries={['/sessions']}>
           <AuthProvider client={null}>
             <RoleProvider>
-              <ModeProvider>
-                <AppRoutes />
-              </ModeProvider>
+              <AppRoutes />
             </RoleProvider>
           </AuthProvider>
         </MemoryRouter>
