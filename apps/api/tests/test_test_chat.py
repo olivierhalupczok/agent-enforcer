@@ -435,3 +435,17 @@ def test_the_test_chat_tells_the_agent_its_mcp_servers(agent: Agent) -> None:
             "allowedTools": ["search_docs"],
         }
     ]
+
+
+# --- setup progress -------------------------------------------------------------------------
+
+
+def test_a_test_chat_call_marks_the_agent_tested() -> None:
+    db = database([AGENT_ROW])
+    app.dependency_overrides[get_agent_database] = lambda: db
+
+    chat("hello")
+
+    stamp = db.client.table.return_value.update.call_args.args[0]
+    assert set(stamp) == {"tested_at"}
+    db.client.table.return_value.update.return_value.eq.assert_called_with("id", AGENT_ID)

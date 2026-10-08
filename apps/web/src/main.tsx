@@ -4,7 +4,6 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 import { createQueryClient } from './api/queryClient'
 import { AppRoutes } from './app/AppRoutes'
-import { ModeProvider } from './app/ModeProvider'
 import { RoleProvider } from './app/RoleProvider'
 import { AuthProvider } from './auth/AuthProvider'
 import { createAuthClient } from './auth/supabase'
@@ -19,9 +18,7 @@ createRoot(document.getElementById('root')!).render(
       <BrowserRouter>
         <AuthProvider client={authClient} guest>
           <RoleProvider>
-            <ModeProvider>
-              <AppRoutes />
-            </ModeProvider>
+            <AppRoutes />
           </RoleProvider>
         </AuthProvider>
       </BrowserRouter>

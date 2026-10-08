@@ -209,6 +209,14 @@ function effectiveFor(agentId: string): EffectiveGuardrail[] {
   return [...mandatory, ...bound]
 }
 
+/** Changes an agent's stored fields; returns the new agent. Setup progress never bumps the version. */
+function patchAgent(id: string, changes: Partial<Agent>): Agent | undefined {
+  const index = fakeApi.agents.findIndex((a) => a.id === id)
+  if (index === -1) return undefined
+  fakeApi.agents[index] = { ...fakeApi.agents[index], ...changes }
+  return fakeApi.agents[index]
+}
+
 export const cardUnreachable = (baseUrl: string) =>
   `Could not fetch the agent's A2A Agent Card from ${baseUrl.replace(/\/$/, '')}/.well-known/agent-card.json`
 
@@ -231,6 +239,8 @@ export const fakeApi: {
   flags: unknown[]
   gatewayKeys: Record<string, string>
   gatewayKeyCount: number
+  /** POST /agents/{id}/setup/{step} calls, in order. */
+  setupSteps: { agentId: string; step: string }[]
   mcpServers: McpServer[]
   lastMcpServerCreate: McpServerCreate | null
   lastMcpServerUpdate: McpServerUpdate | null
@@ -258,6 +268,7 @@ export const fakeApi: {
   flags: [],
   gatewayKeys: {},
   gatewayKeyCount: 0,
+  setupSteps: [],
   mcpServers: seedMcpServers(),
   lastMcpServerCreate: null,
   lastMcpServerUpdate: null,
@@ -293,6 +304,7 @@ export function resetFakeApi(): void {
   fakeApi.flags = []
   fakeApi.gatewayKeys = {}
   fakeApi.gatewayKeyCount = 0
+  fakeApi.setupSteps = []
   fakeApi.mcpServers = seedMcpServers()
   fakeApi.lastMcpServerCreate = null
   fakeApi.lastMcpServerUpdate = null
@@ -605,10 +617,30 @@ export const fakeApiHandlers = [
     if (!fakeApi.agents.some((a) => a.id === id)) return detail(404, 'Agent not found')
     const key = `ghk_test_${++fakeApi.gatewayKeyCount}`
     fakeApi.gatewayKeys[id] = key
+    patchAgent(id, { has_gateway_key: true })
     return HttpResponse.json(
       { agent_id: id, key, gateway_path: `/a/${id}`, agent_card_path: `/a/${id}/.well-known/agent-card.json` },
       { status: 201 },
     )
+  }),
+
+  http.delete(apiPath('/agents/:id/gateway-key'), ({ request, params }) => {
+    if (!signedIn(request)) return notAuthenticated()
+    const id = String(params.id)
+    if (!fakeApi.agents.some((a) => a.id === id)) return detail(404, 'Agent not found')
+    delete fakeApi.gatewayKeys[id]
+    patchAgent(id, { has_gateway_key: false })
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.post(apiPath('/agents/:id/setup/:step'), ({ request, params }) => {
+    if (!signedIn(request)) return notAuthenticated()
+    const id = String(params.id)
+    const step = String(params.step)
+    if (step !== 'guardrails' && step !== 'mcp') return validation("Input should be 'guardrails' or 'mcp'", ['path', 'step'])
+    if (!fakeApi.agents.some((a) => a.id === id)) return detail(404, 'Agent not found')
+    fakeApi.setupSteps.push({ agentId: id, step })
+    return HttpResponse.json(patchAgent(id, step === 'guardrails' ? { guardrails_reviewed: true } : { mcp_reviewed: true }))
   }),
 
   http.post(apiPath('/agents/:id/test-chat'), async ({ request, params }) => {
@@ -617,6 +649,7 @@ export const fakeApiHandlers = [
     if (!fakeApi.agents.some((a) => a.id === params.id)) return detail(404, 'Agent not found')
     const body = (await request.json()) as SendMessageRequest
     fakeApi.testChatRequests.push(body)
+    patchAgent(String(params.id), { tested: true })
     return HttpResponse.json(simulateTestChat(body, { serial: fakeApi.testChatRequests.length }))
   }),
 

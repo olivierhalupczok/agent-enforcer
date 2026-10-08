@@ -54,7 +54,7 @@ describe('phone drawer', () => {
 
   it('moves focus to the first nav link when opened', async () => {
     await openMenu()
-    expect(screen.getByRole('link', { name: 'Sessions' })).toHaveFocus()
+    expect(screen.getByRole('link', { name: 'Agents' })).toHaveFocus()
   })
 
   it('returns focus to the Menu button after Escape', async () => {

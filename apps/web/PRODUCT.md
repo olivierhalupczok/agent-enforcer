@@ -50,10 +50,6 @@ The product distinguishes these terms:
 - **Session:** an A2A conversation keyed by `contextId`; it is not a stored transcript.
 - **Audit event:** a gateway block, redaction, warning, or limit hit.
 
-`Agent Integrated`, the pi coding-agent control layer and its file-based `.pi/policy.json`, is a
-prototype/demo surface rather than a core Guardrail Hub product area. Its policies, incidents, and
-hostname-based agent identity must not be conflated with the gateway concepts above.
-
 ## Capabilities and Constraints
 
 - Register A2A 1.0 JSON-RPC agents by base URL and discover their Agent Card.
@@ -91,10 +87,9 @@ the approved canonical brand asset remains undecided.
 ## Evidence on Hand
 
 - The working React application in `src/` contains the implemented registration, guardrail,
-  deployment, test, session, audit, MCP, security-scan, policy-demo, playground, and incident flows.
+  deployment, test, session, audit, MCP, and security-scan flows.
 - The gateway contract is documented in `../../docs/agent-contract-a2a.md`.
 - Product and implementation decisions are recorded in `../../docs/superpowers/specs/`.
-- The pi control-layer schema and example policy live in `../../packages/pi-control-layer/`.
 - The marketing implementation in `../landing/` provides product language, but unsupported claims
   there are not accepted evidence of shipped functionality.
 - There are no approved customer testimonials, case studies, benchmarks, pricing claims, or press

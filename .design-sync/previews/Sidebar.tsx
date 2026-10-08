@@ -1,4 +1,4 @@
-import { AuthContext, MemoryRouter, ModeContext, RoleContext, Sidebar } from 'web'
+import { AuthContext, MemoryRouter, RoleContext, Sidebar } from 'web'
 
 const noop = () => {}
 const auth = {
@@ -11,22 +11,19 @@ const auth = {
   watchTables: null,
 }
 
-function Shell({ mode, role, path }: { mode: 'panel' | 'agent'; role: 'admin' | 'dev' | 'tester'; path: string }) {
+function Shell({ role, path }: { role: 'admin' | 'dev' | 'tester'; path: string }) {
   return (
     <MemoryRouter initialEntries={[path]}>
       <AuthContext value={auth}>
         <RoleContext value={{ role, setRole: noop }}>
-          <ModeContext value={{ mode, setMode: noop }}>
-            <div className="h-[760px]">
-              <Sidebar id="preview-sidebar" open onNavigate={noop} counts={{ '/sessions': 3 }} />
-            </div>
-          </ModeContext>
+          <div className="h-[760px]">
+            <Sidebar id="preview-sidebar" open onNavigate={noop} counts={{ '/audit': 3 }} />
+          </div>
         </RoleContext>
       </AuthContext>
     </MemoryRouter>
   )
 }
 
-export const AgentWrapped = () => <Shell mode="panel" role="admin" path="/sessions" />
-export const AgentIntegrated = () => <Shell mode="agent" role="admin" path="/playground" />
-export const TesterRole = () => <Shell mode="panel" role="tester" path="/test" />
+export const AdminNav = () => <Shell role="admin" path="/agents" />
+export const TesterRole = () => <Shell role="tester" path="/test" />
