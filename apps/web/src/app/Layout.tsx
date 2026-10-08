@@ -5,6 +5,7 @@ import { Sidebar } from './Sidebar'
 
 const SIDEBAR_ID = 'app-sidebar'
 
+/** App shell: Sidebar on the left (drawer on phones) and the routed page in `<main>` via `<Outlet>`. Use as a parent route element. */
 export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuButtonRef = useRef<HTMLButtonElement>(null)

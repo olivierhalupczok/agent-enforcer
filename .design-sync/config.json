@@ -1,0 +1,51 @@
+{
+  "projectId": "7365b80c-ef07-43b7-b3be-8b9f447b6b53",
+  "shape": "package",
+  "pkg": "web",
+  "globalName": "GuardrailHub",
+  "entry": "apps/web/src/ui/index.ts",
+  "buildCmd": "node .design-sync/build-css.mjs",
+  "cssEntry": "dist/ds.css",
+  "tsconfig": "tsconfig.app.json",
+  "extraEntries": [
+    "react-router"
+  ],
+  "componentSrcMap": {
+    "PageShell": "src/ui/Page.tsx",
+    "PageHeader": "src/ui/Page.tsx",
+    "EmptyState": "src/ui/Page.tsx",
+    "LoadingRows": "src/ui/Page.tsx",
+    "TableFrame": "src/ui/Page.tsx",
+    "LiveBadge": "src/ui/LiveBadge.tsx",
+    "Brand": "src/app/Brand.tsx",
+    "Sidebar": "src/app/Sidebar.tsx",
+    "Layout": "src/app/Layout.tsx"
+  },
+  "dtsPropsFor": {
+    "PageShell": "children: React.ReactNode; className?: string;",
+    "PageHeader": "title: React.ReactNode; description?: React.ReactNode; actions?: React.ReactNode; meta?: React.ReactNode;",
+    "EmptyState": "title: string; description: React.ReactNode; action?: React.ReactNode;",
+    "LoadingRows": "label: string; count?: number;",
+    "TableFrame": "label: string; children: React.ReactNode; className?: string;",
+    "LiveBadge": "",
+    "Brand": "subtitle?: string;",
+    "Sidebar": "id: string; open: boolean; onNavigate: () => void; counts?: Partial<Record<string, number>>;",
+    "Layout": ""
+  },
+  "overrides": {
+    "TableFrame": {
+      "cardMode": "column"
+    },
+    "Sidebar": {
+      "cardMode": "single",
+      "primaryStory": "AgentWrapped",
+      "viewport": "900x820"
+    },
+    "Layout": {
+      "cardMode": "single",
+      "primaryStory": "AgentsPage",
+      "viewport": "1280x800"
+    }
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}

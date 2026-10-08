@@ -12,6 +12,7 @@ interface SidebarProps {
   counts?: Partial<Record<string, number>>
 }
 
+/** Dark app navigation: brand, mode switch, nav links with count badges, session and role switch. Needs a router plus Auth, Role and Mode contexts. */
 export function Sidebar({ id, open, onNavigate, counts = {} }: SidebarProps) {
   const { role, setRole } = useRole()
   const { session, signOut } = useAuth()
