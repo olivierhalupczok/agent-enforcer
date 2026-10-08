@@ -37,7 +37,7 @@ const { buttonPrimary, buttonSecondary, inputClass, badgeClass, pillClass } = wi
 
 ## Page anatomy
 
-Every page is `PageShell` > `PageHeader` > content. Lists show `LoadingRows` while loading, `EmptyState` when empty, and a `<table>` inside `TableFrame` otherwise. `LiveBadge` goes in `PageHeader` `actions` for pages with live updates.
+Every page is `PageShell` > `PageHeader` > content. Lists show `LoadingRows` while loading, `EmptyState` when empty, and a `<table>` inside `TableFrame` otherwise. `LiveBadge` goes in `PageHeader` `actions` for pages with live updates. A status pill beside the title goes in `PageHeader` `badge` (agents: `bg-warn-bg text-warn-fg` "Setup · 2 of 5" until live, then `bg-teal-soft text-teal-dark` "Live"). Inside `Layout`, `useToast()` returns a function that shows a short bottom-right confirmation (e.g. `toast('Guarded URL copied.')`).
 
 ```jsx
 const { PageShell, PageHeader, TableFrame, buttonPrimary } = window.GuardrailHub
@@ -54,25 +54,23 @@ const { PageShell, PageHeader, TableFrame, buttonPrimary } = window.GuardrailHub
 
 ## App shell setup
 
-`Sidebar` and `Layout` read a router and three contexts, and throw without them. `Layout` renders the routed page through `<Outlet>`, so use it as a parent route. Wrap like this (all exported from the bundle, react-router included):
+`Sidebar` and `Layout` read a router and two contexts, and throw without them. `Layout` renders the routed page through `<Outlet>`, so use it as a parent route. Wrap like this (all exported from the bundle, react-router included):
 
 ```jsx
-const { MemoryRouter, Routes, Route, AuthContext, RoleContext, ModeContext, Layout } = window.GuardrailHub
+const { MemoryRouter, Routes, Route, AuthContext, RoleContext, Layout } = window.GuardrailHub
 const auth = { status: 'ready', configured: true, notice: null, watchTables: null,
   session: { accessToken: '', email: 'maria@acme.dev', anonymous: false },
   signIn: async () => null, signOut: async () => {} }
 <MemoryRouter initialEntries={['/agents']}>
   <AuthContext value={auth}>
     <RoleContext value={{ role: 'admin', setRole: () => {} }}>
-      <ModeContext value={{ mode: 'panel', setMode: () => {} }}>
-        <Routes><Route element={<Layout />}><Route path="*" element={<YourPage />} /></Route></Routes>
-      </ModeContext>
+      <Routes><Route element={<Layout />}><Route path="*" element={<YourPage />} /></Route></Routes>
     </RoleContext>
   </AuthContext>
 </MemoryRouter>
 ```
 
-`mode` is `'panel'` (Agent Wrapped nav: Sessions, Agents, Guardrails, Audit log, MCP servers, Test chat, Security) or `'agent'` (Agent Integrated nav: Playground, Policies, Incidents, Sessions). `role` is `'admin' | 'dev' | 'tester'`. The nav highlights the link matching the router path. `Brand` has white text: only place it on `bg-sidebar` inside an `on-dark` wrapper.
+The nav is Agents, then a Library section (Guardrails, MCP servers) and a Monitor section (Sessions, Audit log, Security); a tester sees only Test chat. `role` is `'admin' | 'dev' | 'tester'`. The nav highlights the link matching the router path. `Brand` has white text: only place it on `bg-sidebar` inside an `on-dark` wrapper.
 
 ## Where the truth lives
 
