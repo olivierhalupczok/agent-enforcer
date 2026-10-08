@@ -268,7 +268,11 @@ export function AgentGuardrails({ agent }: { agent: Agent }) {
             </Link>
           </div>
           {attachable.length === 0 ? (
-            <p className="m-0 text-sm text-muted">Every guardrail in the library is attached.</p>
+            <p className="m-0 text-sm text-muted">
+              {library.some((g) => g.enabled && !g.is_mandatory)
+                ? 'Every guardrail in the library is attached.'
+                : 'The library has no guardrails to attach yet. Create one, then attach it here.'}
+            </p>
           ) : (
             <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-2.5 p-0">
               {attachable.map((g) => (
