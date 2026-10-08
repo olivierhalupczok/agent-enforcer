@@ -497,3 +497,27 @@ def test_huge_usage_is_capped_so_the_counter_fits_the_database() -> None:
     assert post(with_context("ctx-1")).status_code == 200
     session = MEMORY.sessions[(AGENT_ID, "ctx-1")]
     assert (session.input_tokens, session.output_tokens) == (a2a.MAX_REPORTED_TOKENS, 3)
+
+
+def test_owner_revokes_the_gateway_key() -> None:
+    database = MagicMock()
+    query = database.table.return_value.update.return_value.eq.return_value
+    query.execute.return_value.data = [{"id": AGENT_ID}]
+    app.dependency_overrides[get_agent_database] = lambda: AgentDatabase(
+        client=database, owner_id="971f4031-2dd9-4327-94c7-45323de61c67"
+    )
+
+    r = client.delete(f"/api/v1/agents/{AGENT_ID}/gateway-key")
+
+    assert r.status_code == 204
+    database.table.return_value.update.assert_called_once_with({"gateway_key_hash": None})
+    database.table.return_value.update.return_value.eq.assert_called_once_with("id", AGENT_ID)
+
+
+def test_revoking_the_key_of_someone_elses_agent_is_404() -> None:
+    database = MagicMock()
+    database.table.return_value.update.return_value.eq.return_value.execute.return_value.data = []
+    app.dependency_overrides[get_agent_database] = lambda: AgentDatabase(
+        client=database, owner_id="971f4031-2dd9-4327-94c7-45323de61c67"
+    )
+    assert client.delete(f"/api/v1/agents/{AGENT_ID}/gateway-key").status_code == 404

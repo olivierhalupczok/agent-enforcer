@@ -9,12 +9,15 @@ block, redaction and warning goes to the audit log, recorded as the signed-in ow
 One contextId per chat: the panel sends it; if it is missing, one is created and returned.
 """
 
+import contextlib
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
 import httpx
 from fastapi import APIRouter, Depends
 from fastapi.concurrency import run_in_threadpool
+from postgrest.exceptions import APIError
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.deps import get_role
@@ -254,4 +257,13 @@ async def send_test_chat_message(
         hub["limits"] = reply.limits
         hub["scores"] = []  # FR-28 evaluators are not wired in yet
         a2a.add_hub_metadata(result, hub)
+        await run_in_threadpool(_mark_tested, database, agent_id)
     return ChatResponse.model_validate(answer)
+
+
+def _mark_tested(database: AgentDatabase, agent_id: UUID) -> None:
+    """Completes the agent's Test setup step. Progress only: a failure never fails the chat."""
+    with contextlib.suppress(APIError, httpx.HTTPError):
+        database.client.table("agents").update({"tested_at": datetime.now(UTC).isoformat()}).eq(
+            "id", str(agent_id)
+        ).execute()
