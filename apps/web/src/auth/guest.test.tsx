@@ -20,7 +20,7 @@ describe('guest sessions', () => {
     const { auth } = renderApp('/agents', undefined, { signedIn: false, guest: true })
     expect(await screen.findByText('No agents yet. Register your first one.')).toBeInTheDocument()
     expect(location()).toBe('/agents')
-    expect(screen.queryByRole('heading', { name: 'Sign in to Guardrail Hub' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Sign in to Agent Enforcer' })).not.toBeInTheDocument()
     expect(auth.session?.anonymous).toBe(true)
     expect(seen[0]).toBe(`Bearer ${TEST_TOKEN}`)
   })

@@ -10,7 +10,7 @@ import { agentPath, gatewayUrls, type Section, type SetupProgress } from './setu
 import { ArrowLink, sectionCard, sectionText, sectionTitle, smallButton, term } from './workspaceUi'
 import { copyText } from './workspace'
 
-const KEY_PLACEHOLDER = '$GUARDRAIL_HUB_KEY'
+const KEY_PLACEHOLDER = '$AGENT_ENFORCER_KEY'
 
 function curlExample(url: string, key: string): string {
   const body = {

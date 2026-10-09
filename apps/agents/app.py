@@ -1,4 +1,4 @@
-"""Stateless demo agent for the Guardrail Hub hackathon demo, speaking A2A 1.0.
+"""Stateless demo agent for the Agent Enforcer hackathon demo, speaking A2A 1.0.
 
 The server stores nothing, so any number of instances can run behind one URL, and the hub
 can sit in front of it without the agent knowing. Contract (docs/agent-contract-a2a.md):
@@ -7,7 +7,7 @@ can sit in front of it without the agent knowing. Contract (docs/agent-contract-
     POST /a2a                            JSON-RPC 2.0, method SendMessage, header A2A-Version: 1.0
 
 A2A sends one message per call, so each message is answered on its own. Text parts the hub
-tags with metadata.guardrailHub ("governance", "context") are added to the system prompt.
+tags with metadata.agentEnforcer ("governance", "context") are added to the system prompt.
 
 This agent is deliberately UNGUARDED: its prompt holds a customer record and an internal
 note, so it will leak them when asked. That is the "before" picture the hub's guardrails fix.
@@ -155,7 +155,7 @@ def split_parts(message: Message) -> tuple[str, list[str]]:
     for part in message.parts:
         if part.text is None:
             continue
-        if isinstance((part.metadata or {}).get("guardrailHub"), str):
+        if isinstance((part.metadata or {}).get("agentEnforcer"), str):
             hub.append(part.text)
         else:
             user.append(part.text)

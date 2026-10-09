@@ -48,7 +48,7 @@ export function simulateTestChat(
         contextId,
         role: 'ROLE_AGENT',
         parts: [{ text: replyText }],
-        metadata: { guardrailHub: { trace: runs, usage, limits } },
+        metadata: { agentEnforcer: { trace: runs, usage, limits } },
       },
     },
   })
@@ -63,7 +63,7 @@ export function simulateTestChat(
           state: 'TASK_STATE_REJECTED',
           message: { messageId: `agent-${serial}`, role: 'ROLE_AGENT', parts: [{ text: why }] },
         },
-        metadata: { guardrailHub: { blocked: true, stage, trace: runs, usage, limits } },
+        metadata: { agentEnforcer: { blocked: true, stage, trace: runs, usage, limits } },
       },
     },
   })

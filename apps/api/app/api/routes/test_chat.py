@@ -2,7 +2,7 @@
 
 The signed-in owner sends an A2A SendMessage call. It goes through the same guarded path as
 the agent's guarded URL (app.gateway.service): input guardrails, the agent, output guardrails.
-The answer is the A2A reply with metadata.guardrailHub holding the full trace, the token usage,
+The answer is the A2A reply with metadata.agentEnforcer holding the full trace, the token usage,
 the limits used and the evaluator scores. The turn is counted in the session (A-07) and every
 block, redaction and warning goes to the audit log, recorded as the signed-in owner.
 
@@ -130,7 +130,7 @@ class EvaluatorScore(BaseModel):
     score: float
 
 
-class GuardrailHubMetadata(BaseModel):
+class AgentEnforcerMetadata(BaseModel):
     policyVersion: str | None = Field(
         default=None, description="Hash of the resolved guardrail set; changes on config edits"
     )
@@ -146,7 +146,7 @@ class GuardrailHubMetadata(BaseModel):
 
 
 class ReplyMetadata(_A2AModel):
-    guardrailHub: GuardrailHubMetadata | None = None
+    agentEnforcer: AgentEnforcerMetadata | None = None
 
 
 class ReplyMessage(A2AMessage):

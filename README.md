@@ -1,4 +1,4 @@
-# Guardrail Hub
+# Agent Enforcer
 
 See for yourself:  
 https://hackyeah-2026-theta.vercel.app/agents

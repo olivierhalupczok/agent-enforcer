@@ -17,7 +17,7 @@ export interface TraceEntry {
   simulated?: boolean
 }
 
-export interface GuardrailHubMetadata {
+export interface AgentEnforcerMetadata {
   blocked?: boolean
   stage?: 'input' | 'output'
   policyVersion?: string
@@ -30,7 +30,7 @@ export interface GuardrailHubMetadata {
 }
 
 export interface A2AMetadata {
-  guardrailHub?: GuardrailHubMetadata
+  agentEnforcer?: AgentEnforcerMetadata
   usage?: { inputTokens: number; outputTokens: number }
   [key: string]: unknown
 }
@@ -81,9 +81,9 @@ export interface Reply {
   text: string
   verdict: Verdict
   trace: TraceEntry[]
-  usage?: GuardrailHubMetadata['usage']
-  limits: NonNullable<GuardrailHubMetadata['limits']>
-  scores: NonNullable<GuardrailHubMetadata['scores']>
+  usage?: AgentEnforcerMetadata['usage']
+  limits: NonNullable<AgentEnforcerMetadata['limits']>
+  scores: NonNullable<AgentEnforcerMetadata['scores']>
   errorMessage?: string
   /** Made up in the browser while the API has no test chat endpoint (B-06); see testChatSimulator. */
   simulated?: boolean
@@ -113,7 +113,7 @@ function errorReply(messageId: string, errorMessage: string): Reply {
 }
 
 function fromHub(messageId: string, text: string, metadata: A2AMetadata | undefined): Reply {
-  const hub = metadata?.guardrailHub ?? {}
+  const hub = metadata?.agentEnforcer ?? {}
   const trace = hub.trace ?? []
   const has = (v: TraceEntry['verdict']) => trace.some((t) => t.verdict === v)
   const verdict: Verdict =
