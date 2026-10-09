@@ -91,7 +91,7 @@ interface Gap {
 function findGap(turn: ChatTurn, library: Guardrail[], bindings: Binding[]): Gap | null {
   const scenario = SCENARIOS.find((s) => s.id === turn.scenarioId)
   const reply = turn.reply
-  if (!scenario?.probes || !reply || reply.verdict === 'error' || reply.simulated) return null
+  if (!scenario?.probes || !reply || reply.verdict === 'error') return null
   const templateOf = new Map(library.map((g) => [g.id, g.config.template]))
   if (reply.trace.some((t) => fired(t) && templateOf.get(t.guardrailId) === scenario.probes)) return null
   if (reply.verdict === 'blocked') return null // something else stopped it
@@ -327,7 +327,6 @@ function TurnView({ agent, turn, gap, fixing, onFix }: TurnViewProps) {
             {trace.length
               ? `${trace.length} ${trace.length === 1 ? 'check' : 'checks'} · ${firedCount ? `${firedCount} fired` : 'all passed'}`
               : 'No checks ran'}
-            {reply.simulated && ' · simulated'}
           </summary>
           <ol className="m-0 mt-1.5 flex list-none flex-col gap-1 p-0">
             {trace.map((t, i) => (

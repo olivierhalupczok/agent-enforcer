@@ -34,7 +34,7 @@ describe('Agent guardrails step (bindings)', () => {
     await open()
     const always = within(attachedSection()).getByRole('list', { name: 'Always applied' })
     expect(within(always).getByText('Prompt injection detector')).toBeInTheDocument()
-    expect(within(always).getByText('Set by an admin')).toBeInTheDocument()
+    expect(within(always).getByText('Mandatory on all your agents')).toBeInTheDocument()
     expect(within(always).queryByRole('button')).not.toBeInTheDocument()
   })
 

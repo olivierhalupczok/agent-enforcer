@@ -1,9 +1,8 @@
 import { Fragment } from 'react'
-import { NavLink, useNavigate } from 'react-router'
+import { NavLink } from 'react-router'
 import { useAuth } from '../auth/context'
 import { Brand } from './Brand'
-import { DEFAULT_HOME, TESTER_HOME, navItemsFor } from './nav'
-import { ROLES, useRole, type Role } from './role'
+import { NAV_ITEMS } from './nav'
 
 interface SidebarProps {
   id: string
@@ -12,21 +11,9 @@ interface SidebarProps {
   counts?: Partial<Record<string, number>>
 }
 
-/** Dark app navigation: brand, nav links grouped into sections with count badges, session and role switch. Needs a router plus Auth and Role contexts. */
+/** Dark app navigation: brand, nav links grouped into sections with count badges, and the signed-in account. Needs a router and the Auth context. */
 export function Sidebar({ id, open, onNavigate, counts = {} }: SidebarProps) {
-  const { role, setRole } = useRole()
   const { session, signOut } = useAuth()
-  const navigate = useNavigate()
-  const note = ROLES.find((r) => r.id === role)?.note
-
-  const pickRole = (next: Role) => {
-    if (next !== role) {
-      setRole(next)
-      if (next === 'tester') navigate(TESTER_HOME)
-      else if (role === 'tester') navigate(DEFAULT_HOME)
-    }
-    onNavigate()
-  }
 
   return (
     <aside
@@ -39,7 +26,7 @@ export function Sidebar({ id, open, onNavigate, counts = {} }: SidebarProps) {
       <Brand />
 
       <nav aria-label="Main" className="flex flex-col gap-1">
-        {navItemsFor(role).map((item, index, items) => {
+        {NAV_ITEMS.map((item, index, items) => {
           const count = counts[item.path] ?? 0
           const startsSection = item.section && item.section !== items[index - 1]?.section
           return (
@@ -73,50 +60,22 @@ export function Sidebar({ id, open, onNavigate, counts = {} }: SidebarProps) {
       </nav>
       <div className="mt-auto flex flex-col gap-2 px-2">
         {session && (
-          <div className="flex flex-col gap-2 border-b border-sidebar-track pb-4">
+          <>
             <span className="truncate text-xs text-sidebar-subtle" title={session.email || undefined}>
-              {session.anonymous ? 'Guest session' : session.email}
+              {session.email}
             </span>
-            {!session.anonymous && (
-              <button
-                type="button"
-                onClick={() => {
-                  onNavigate()
-                  void signOut()
-                }}
-                className="min-h-11 cursor-pointer rounded-lg border border-sidebar-track bg-transparent px-3 text-left text-sm font-medium text-sidebar-muted hover:bg-sidebar-active hover:text-white"
-              >
-                Sign out
-              </button>
-            )}
-          </div>
+            <button
+              type="button"
+              onClick={() => {
+                onNavigate()
+                void signOut()
+              }}
+              className="min-h-11 cursor-pointer rounded-lg border border-sidebar-track bg-transparent px-3 text-left text-sm font-medium text-sidebar-muted hover:bg-sidebar-active hover:text-white"
+            >
+              Sign out
+            </button>
+          </>
         )}
-        <span id={`${id}-role-label`} className="text-xs tracking-[0.06em] text-sidebar-subtle uppercase">
-          Viewing as
-        </span>
-        <div
-          role="group"
-          aria-labelledby={`${id}-role-label`}
-          className="flex gap-1 rounded-[10px] bg-sidebar-track p-1"
-        >
-          {ROLES.map((r) => {
-            const on = r.id === role
-            return (
-              <button
-                key={r.id}
-                type="button"
-                aria-pressed={on}
-                onClick={() => pickRole(r.id)}
-                className={`min-h-11 flex-1 cursor-pointer rounded-[7px] border-0 px-1.5 text-xs font-semibold ${
-                  on ? 'bg-white text-sidebar' : 'bg-transparent text-sidebar-muted hover:text-white'
-                }`}
-              >
-                {r.label}
-              </button>
-            )
-          })}
-        </div>
-        <p className="m-0 text-xs leading-[1.45] text-sidebar-subtle">{note}</p>
       </div>
     </aside>
   )

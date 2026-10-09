@@ -108,7 +108,7 @@ export interface GuardrailRule {
 export interface GuardrailCreate extends GuardrailRule {
   name: string
   description: string | null
-  /** FR-06: applies to every agent and cannot be detached. Admin only. */
+  /** FR-06: applies to all of the owner's agents and cannot be detached from one. */
   is_mandatory?: boolean
 }
 

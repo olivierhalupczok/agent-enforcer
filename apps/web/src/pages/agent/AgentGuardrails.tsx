@@ -154,7 +154,7 @@ export function AgentGuardrails({ agent }: { agent: Agent }) {
                   <Lock />
                   <span className="text-sm font-semibold">{g.name}</span>
                   <Badges guardrail={g} />
-                  <span className="ml-auto text-xs text-muted">Set by an admin</span>
+                  <span className="ml-auto text-xs text-muted">Mandatory on all your agents</span>
                 </li>
               ))}
             </ul>

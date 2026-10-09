@@ -37,7 +37,7 @@ export function useAgentTestChat(agentId: string) {
       {
         onSuccess: (reply) => {
           update(turn.id, forContext, { status: 'done', reply })
-          if (!reply.simulated) markTested()
+          markTested()
         },
         onError: (error) => update(turn.id, forContext, { status: 'failed', failure: error.message }),
       },

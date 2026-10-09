@@ -1,5 +1,3 @@
-import type { Role } from './role'
-
 export interface NavItem {
   path: string
   label: string
@@ -19,18 +17,4 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { path: '/security', label: 'Security', title: 'Security scan', section: 'Monitor' },
 ]
 
-// Testers only send test messages, so their whole app is the test chat.
-export const TESTER_NAV_ITEMS: readonly NavItem[] = [
-  { path: '/test', label: 'Test chat', title: 'Test chat' },
-]
-
-export const TESTER_HOME = '/test'
 export const DEFAULT_HOME = '/agents'
-
-export function homeFor(role: Role): string {
-  return role === 'tester' ? TESTER_HOME : DEFAULT_HOME
-}
-
-export function navItemsFor(role: Role): readonly NavItem[] {
-  return role === 'tester' ? TESTER_NAV_ITEMS : NAV_ITEMS
-}
