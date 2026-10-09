@@ -1,20 +1,13 @@
-// Stand-in for B-06 (#46) until the API has POST /agents/{id}/test-chat: imitates the guarded
-// gateway in front of apps/test-agent, whose triggers start the message. It answers in exactly the
-// shape B-06 will, so the page's parser, badges and trace don't change. Delete it once B-06 ships.
-// The test suite's fake API uses it too.
-import type { SendMessageRequest, SendMessageResponse, TraceEntry } from './a2a'
+// The fake API's POST /agents/{id}/test-chat (tests only): imitates the guarded gateway in front of
+// apps/test-agent, whose triggers start the message, answering in the shape the real endpoint does.
+import type { SendMessageRequest, SendMessageResponse, TraceEntry } from '../api/a2a'
 
 interface SimulateOptions {
   /** Makes ids unique within a run. */
   serial: number
-  /** Mark every trace entry simulated (the browser fallback); the test fake leaves real ones unmarked. */
-  markSimulated?: boolean
 }
 
-export function simulateTestChat(
-  request: SendMessageRequest,
-  { serial, markSimulated = false }: SimulateOptions,
-): SendMessageResponse {
+export function simulateTestChat(request: SendMessageRequest, { serial }: SimulateOptions): SendMessageResponse {
   const trace = (
     name: string,
     stage: TraceEntry['stage'],
@@ -30,7 +23,7 @@ export function simulateTestChat(
     verdict,
     reason,
     latencyMs: 3,
-    ...(simulated || markSimulated ? { simulated: true } : {}),
+    ...(simulated ? { simulated: true } : {}),
   })
   const injectionPass = trace('Prompt injection detector', 'input', 'pass', 'No match')
 

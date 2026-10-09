@@ -14,6 +14,11 @@
       "buildCommand": "npx pnpm@12.8.1 run build",
       "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
     },
+    "demo-agent": {
+      "root": "apps/agents",
+      "framework": "fastapi",
+      "entrypoint": "app:app"
+    },
     "landing": {
       "root": "apps/landing",
       "framework": "astro",
@@ -24,6 +29,7 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": { "service": "api" } },
     { "source": "/a/(.*)", "destination": { "service": "api" } },
+    { "source": "/demo-agent/(.*)", "destination": { "service": "demo-agent" } },
     { "source": "/", "destination": { "service": "landing" } },
     { "source": "/_astro/(.*)", "destination": { "service": "landing" } },
     { "source": "/(.*)", "destination": { "service": "web" } }

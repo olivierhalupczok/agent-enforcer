@@ -13,8 +13,7 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 from app.api.routes.agents.deps import ResolvedUpstream
-from app.audit.memory import MEMORY
-from app.audit.recorder import InMemoryAuditRecorder, get_audit_recorder
+from app.audit.recorder import get_audit_recorder
 from app.bindings.models import Binding, EffectivePolicy
 from app.bindings.resolve import resolve
 from app.gateway import router as gateway_router
@@ -24,11 +23,16 @@ from app.gateway.policy import SupabasePolicyLoader, get_policy_loader
 from app.gateway.resolver import UpstreamTarget, get_agent_resolver
 from app.guardrails.models import DryRunResult, Guardrail, Stage
 from app.main import app
-from app.mcp.agent_access import InMemoryAgentMcpRepository, get_gateway_mcp_loader
+from app.mcp.agent_access import get_gateway_mcp_loader
 from app.mcp.models import McpGrant, McpServerCreate
-from app.mcp.repository import InMemoryMcpServerRepository
 from fastapi.testclient import TestClient
 from pydantic import HttpUrl
+from tests.fakes import (
+    MEMORY,
+    InMemoryAgentMcpRepository,
+    InMemoryAuditRecorder,
+    InMemoryMcpServerRepository,
+)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "test-agent" / "src"))
 from acme_test_agent.app import create_app as create_test_agent  # noqa: E402

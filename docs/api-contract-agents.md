@@ -36,8 +36,12 @@ interface AgentUpdate {              // PATCH body; every field optional
 | `PATCH /agents/{id}` | 200 `Agent`; `config_version` + 1 only when something actually changed | 404 (also for another owner's agent); 409 when the agent was edited meanwhile (the write is guarded on the version read); 409 "An agent with this name already exists"; 422 validation; 502 when a changed `base_url` has no readable A2A 1.0 Agent Card (the detail says why) |
 | `DELETE /agents/{id}` (also removes the agent's bindings) | 204 | 404 |
 
-Only the owner can edit or delete an agent (row level security); anyone else gets 404. Admin override of other
-people's agents is not built yet. The version is a counter only; there is no history table (FR-09 would need one).
+Every row belongs to one user: only the owner can read, edit or delete an agent (row level security); anyone
+else gets 404. Every `/api/v1` route needs `Authorization: Bearer <Supabase access token>` (401 without one).
+The version is a counter only; there is no history table (FR-09 would need one).
+
+`POST /me/bootstrap` runs the first-sign-in setup once per account and answers what it did:
+`{"library": "seeded" | "already_seeded", "demo_agent": "added" | "already_added" | "unavailable"}`.
 
 ## B-06: test chat — proposed
 

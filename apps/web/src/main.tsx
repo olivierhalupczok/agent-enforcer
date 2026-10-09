@@ -4,7 +4,6 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 import { createQueryClient } from './api/queryClient'
 import { AppRoutes } from './app/AppRoutes'
-import { RoleProvider } from './app/RoleProvider'
 import { AuthProvider } from './auth/AuthProvider'
 import { createAuthClient } from './auth/supabase'
 import './index.css'
@@ -16,10 +15,8 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AuthProvider client={authClient} guest>
-          <RoleProvider>
-            <AppRoutes />
-          </RoleProvider>
+        <AuthProvider client={authClient}>
+          <AppRoutes />
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

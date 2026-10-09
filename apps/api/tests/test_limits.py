@@ -15,8 +15,7 @@ from typing import Any
 import httpx
 import pytest
 from app.api.routes.agents.deps import ResolvedUpstream
-from app.audit.memory import MEMORY
-from app.audit.recorder import InMemoryAuditRecorder, get_audit_recorder
+from app.audit.recorder import get_audit_recorder
 from app.bindings.models import EffectivePolicy
 from app.bindings.resolve import resolve
 from app.core.config import settings
@@ -25,9 +24,9 @@ from app.gateway import service as gateway_service
 from app.gateway.policy import get_policy_loader
 from app.gateway.resolver import UpstreamTarget, get_agent_resolver
 from app.main import app
-from app.store import store
 from fastapi.testclient import TestClient
 from pydantic import HttpUrl
+from tests.fakes import MEMORY, InMemoryAuditRecorder, store
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "test-agent" / "src"))
 from acme_test_agent.app import create_app as create_test_agent  # noqa: E402

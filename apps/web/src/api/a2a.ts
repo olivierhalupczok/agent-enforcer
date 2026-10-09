@@ -85,8 +85,6 @@ export interface Reply {
   limits: NonNullable<AgentEnforcerMetadata['limits']>
   scores: NonNullable<AgentEnforcerMetadata['scores']>
   errorMessage?: string
-  /** Made up in the browser while the API has no test chat endpoint (B-06); see testChatSimulator. */
-  simulated?: boolean
 }
 
 export const UNFINISHED_TASK = "The agent answered with an unfinished task (outside the hub's A2A profile)."

@@ -15,8 +15,7 @@ import httpx
 import pytest
 from app.api.routes.agents.deps import AgentDatabase, ResolvedUpstream, get_agent_database
 from app.api.routes.test_chat import ChatResponse
-from app.audit.memory import MEMORY
-from app.audit.recorder import InMemoryAuditRecorder, OwnerAuditRecorder, get_audit_recorder
+from app.audit.recorder import OwnerAuditRecorder, get_audit_recorder
 from app.bindings.models import Binding, EffectivePolicy
 from app.bindings.resolve import resolve
 from app.gateway import service as gateway_service
@@ -24,12 +23,16 @@ from app.gateway.policy import get_policy_loader
 from app.gateway.resolver import UpstreamTarget, get_agent_resolver
 from app.guardrails.models import Guardrail
 from app.main import app
-from app.mcp.agent_access import InMemoryAgentMcpRepository
 from app.mcp.models import McpServerCreate
-from app.mcp.repository import InMemoryMcpServerRepository
-from app.store import store
 from fastapi.testclient import TestClient
 from pydantic import HttpUrl
+from tests.fakes import (
+    MEMORY,
+    InMemoryAgentMcpRepository,
+    InMemoryAuditRecorder,
+    InMemoryMcpServerRepository,
+    store,
+)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "test-agent" / "src"))
 from acme_test_agent.app import create_app as create_test_agent  # noqa: E402
@@ -105,17 +108,17 @@ def attach(
     store.bindings[binding.id] = binding
 
 
-def chat(text: str, context_id: str | None = "ctx-chat-1", **headers: str) -> dict[str, Any]:
+def chat(
+    text: str, context_id: str | None = "ctx-chat-1", role: str | None = None
+) -> dict[str, Any]:
     message: dict[str, Any] = {"messageId": "m-1", "role": "ROLE_USER", "parts": [{"text": text}]}
     if context_id is not None:
         message["contextId"] = context_id
-    body = {
-        "jsonrpc": "2.0",
-        "id": "req-1",
-        "method": "SendMessage",
-        "params": {"message": message},
-    }
-    r = client.post(PATH, json=body, headers=headers)
+    params: dict[str, Any] = {"message": message}
+    if role is not None:  # the caller's role, as on the guarded URL
+        params["metadata"] = {"agentEnforcer": {"role": role}}
+    body = {"jsonrpc": "2.0", "id": "req-1", "method": "SendMessage", "params": params}
+    r = client.post(PATH, json=body)
     assert r.status_code == 200, r.text
     ChatResponse.model_validate(r.json())  # the answer matches the documented schema
     answer: dict[str, Any] = r.json()
@@ -135,7 +138,7 @@ def hub_of(answer: dict[str, Any]) -> dict[str, Any]:
 def test_reply_carries_the_trace_usage_limits_and_scores() -> None:
     attach("gr-competitors", 0)  # the seeds' injection and PII guardrails are mandatory
 
-    answer = chat("hello", **{"X-Role": "support"})
+    answer = chat("hello", role="support")
 
     message = answer["result"]["message"]
     assert message["parts"] == [{"text": "Echo: hello"}]
@@ -292,7 +295,7 @@ def test_role_bindings_apply_in_the_test_chat() -> None:
         return [(e["guardrailId"], e["source"]) for e in trace if e["source"] != "mandatory"]
 
     assert bound(chat("hello")) == []  # no role sent
-    assert bound(chat("hello", **{"X-Role": "intern"})) == [("gr-competitors", "role")]
+    assert bound(chat("hello", role="intern")) == [("gr-competitors", "role")]
 
 
 def test_with_supabase_the_test_chat_records_as_the_owner(monkeypatch: pytest.MonkeyPatch) -> None:

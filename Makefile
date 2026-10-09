@@ -1,4 +1,4 @@
-.PHONY: install api web landing cli test-agent lint test supabase supabase-stop
+.PHONY: install api web landing cli test-agent lint test test-db supabase supabase-stop
 
 SUPABASE = pnpm dlx supabase@2.119.0
 
@@ -33,6 +33,10 @@ test:
 supabase:
 	$(SUPABASE) start --workdir apps/api
 	./scripts/supabase-env.sh
+
+# RLS and ownership tests (apps/api/supabase/tests) against the running local Supabase.
+test-db:
+	$(SUPABASE) test db --workdir apps/api
 
 supabase-stop:
 	$(SUPABASE) stop --workdir apps/api

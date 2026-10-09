@@ -164,12 +164,10 @@ def _agent_insert_error(error: APIError) -> HTTPException:
     )
 
 
-@router.post("", response_model=Agent, status_code=status.HTTP_201_CREATED)
-async def register_agent(
-    registration: AgentRegistration,
-    client: Annotated[httpx.AsyncClient, Depends(get_http_client)],
-    database: Annotated[AgentDatabase, Depends(get_agent_database)],
+async def create_agent(
+    registration: AgentRegistration, client: httpx.AsyncClient, database: AgentDatabase
 ) -> Agent:
+    """Read the agent's Agent Card and save it as one of the signed-in user's agents."""
     agent_id = str(uuid4())
     headers = (
         {
@@ -192,6 +190,15 @@ async def register_agent(
         ) from error
 
     return _public_agent(row)
+
+
+@router.post("", response_model=Agent, status_code=status.HTTP_201_CREATED)
+async def register_agent(
+    registration: AgentRegistration,
+    client: Annotated[httpx.AsyncClient, Depends(get_http_client)],
+    database: Annotated[AgentDatabase, Depends(get_agent_database)],
+) -> Agent:
+    return await create_agent(registration, client, database)
 
 
 @router.get("", response_model=AgentList)

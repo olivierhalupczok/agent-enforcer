@@ -9,11 +9,14 @@ import { GuardrailsPage } from '../pages/guardrails/GuardrailsPage'
 import { McpServersPage } from '../pages/mcp/McpServersPage'
 import { SecurityPage } from '../pages/security/SecurityPage'
 import { SessionsPage } from '../pages/sessions/SessionsPage'
-import { SignInPage } from '../pages/SignInPage'
+import { AuthCallbackPage } from '../pages/auth/AuthCallbackPage'
+import { ForgotPasswordPage } from '../pages/auth/ForgotPasswordPage'
+import { ResetPasswordPage } from '../pages/auth/ResetPasswordPage'
+import { SignInPage } from '../pages/auth/SignInPage'
+import { SignUpPage } from '../pages/auth/SignUpPage'
 import { TestChatPage } from '../pages/test/TestChatPage'
 import { Layout } from './Layout'
-import { homeFor, navItemsFor } from './nav'
-import { useRole } from './role'
+import { DEFAULT_HOME, NAV_ITEMS } from './nav'
 
 // Every navigation item maps to a shipped screen.
 const PAGES: Record<string, ReactElement> = {
@@ -27,11 +30,13 @@ const PAGES: Record<string, ReactElement> = {
 }
 
 export function AppRoutes() {
-  const { role } = useRole()
-
   return (
     <Routes>
       <Route path="/sign-in" element={<SignInPage />} />
+      <Route path="/sign-up" element={<SignUpPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/auth/callback" element={<AuthCallbackPage />} />
       <Route
         element={
           <RequireAuth>
@@ -39,18 +44,14 @@ export function AppRoutes() {
           </RequireAuth>
         }
       >
-        {navItemsFor(role).map((item) => (
+        {NAV_ITEMS.map((item) => (
           <Route key={item.path} path={item.path} element={PAGES[item.path]} />
         ))}
-        {role !== 'tester' && (
-          <>
-            <Route path="/agents/new" element={<RegisterAgentPage />} />
-            {/* Not in the nav (agents are tested from their workspace), but deep links keep working. */}
-            <Route path="/test" element={<TestChatPage />} />
-            <Route path="/agents/:agentId/:section?" element={<AgentPage />} />
-          </>
-        )}
-        <Route path="*" element={<Navigate to={homeFor(role)} replace />} />
+        <Route path="/agents/new" element={<RegisterAgentPage />} />
+        {/* Not in the nav (agents are tested from their workspace), but deep links keep working. */}
+        <Route path="/test" element={<TestChatPage />} />
+        <Route path="/agents/:agentId/:section?" element={<AgentPage />} />
+        <Route path="*" element={<Navigate to={DEFAULT_HOME} replace />} />
       </Route>
     </Routes>
   )

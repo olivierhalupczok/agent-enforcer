@@ -1,5 +1,4 @@
 import { screen, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { renderApp } from '../test/renderApp'
 import { NAV_ITEMS } from './nav'
@@ -16,7 +15,12 @@ describe('AppRoutes', () => {
     },
   )
 
-  it('lists every nav item for admins, grouped under Library and Monitor', () => {
+  it.each(['/sign-in', '/sign-up'])('%s sends signed-in users to the app', (path) => {
+    renderApp(path)
+    expect(location()).toBe('/agents')
+  })
+
+  it('lists every nav item, grouped under Library and Monitor', () => {
     renderApp('/agents')
     const labels = within(mainNav())
       .getAllByRole('link')
@@ -51,36 +55,5 @@ describe('AppRoutes', () => {
       'aria-current',
       'page',
     )
-  })
-
-  it('sends a tester to /test and shows only Test chat', () => {
-    renderApp('/sessions', 'tester')
-    expect(location()).toBe('/test')
-    const labels = within(mainNav())
-      .getAllByRole('link')
-      .map((a) => a.textContent)
-    expect(labels).toEqual(['Test chat'])
-  })
-
-  it('sends a tester deep link to /test', () => {
-    renderApp('/agents/support-bot', 'tester')
-    expect(location()).toBe('/test')
-  })
-
-  it('switching to Tester goes to /test, and back to Developer goes to /agents', async () => {
-    const user = userEvent.setup()
-    renderApp('/sessions')
-    await user.click(screen.getByRole('button', { name: 'Tester' }))
-    expect(location()).toBe('/test')
-    await user.click(screen.getByRole('button', { name: 'Developer' }))
-    expect(location()).toBe('/agents')
-  })
-
-  it('switching between Admin and Developer keeps the current page', async () => {
-    const user = userEvent.setup()
-    renderApp('/sessions')
-    await user.click(screen.getByRole('button', { name: 'Developer' }))
-    expect(location()).toBe('/sessions')
-    expect(screen.getByRole('button', { name: 'Developer' })).toHaveAttribute('aria-pressed', 'true')
   })
 })

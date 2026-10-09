@@ -15,7 +15,7 @@ Target project: https://claude.ai/design/p/7365b80c-ef07-43b7-b3be-8b9f447b6b53 
 ## Preview decisions
 
 - Page-level previews sit in `bg-canvas p-6` so they read like the app (the app body is canvas).
-- Sidebar and Layout throw without a router + `AuthContext`/`RoleContext`; their previews pass stub context values (no Supabase). Both use `cardMode: single` (Sidebar 900x820, Layout 1280x800) because Sidebar is `md:h-screen` / a fixed drawer below 768px.
+- Sidebar and Layout throw without a router + `AuthContext`; their previews pass a stub auth value (no Supabase). Both use `cardMode: single` (Sidebar 900x820, Layout 1280x800) because Sidebar is `md:h-screen` / a fixed drawer below 768px.
 - TableFrame story tables are kept at `min-w-[560px]`: the product pane is <=728px wide and a 920px table clips its last column in the card.
 - Brand renders white text, so its previews sit on `bg-sidebar` inside `on-dark`.
 

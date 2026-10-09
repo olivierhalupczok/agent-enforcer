@@ -30,7 +30,7 @@ target-version = "py312"
 select = ["E", "F", "I", "B", "UP", "SIM"]
 
 [tool.pytest.ini_options]
-testpaths = ["packages", "apps/cli", "apps/test-agent"]
+testpaths = ["packages", "apps/cli", "apps/test-agent", "apps/agents/tests"]
 
 [tool.mypy]
 strict = true

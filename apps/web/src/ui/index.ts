@@ -8,6 +8,4 @@ export { badgeClass, buttonPrimary, buttonSecondary, inputClass, pillClass } fro
 export { Brand } from '../app/Brand'
 export { Sidebar } from '../app/Sidebar'
 export { Layout } from '../app/Layout'
-export { RoleProvider } from '../app/RoleProvider'
-export { RoleContext } from '../app/role'
 export { AuthContext } from '../auth/context'

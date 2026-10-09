@@ -38,7 +38,7 @@
     },
     "Sidebar": {
       "cardMode": "single",
-      "primaryStory": "AdminNav",
+      "primaryStory": "Navigation",
       "viewport": "900x820"
     },
     "Layout": {

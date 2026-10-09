@@ -14,7 +14,7 @@ AI Control Layer: put guardrails in front of any A2A agent, watch every rule fir
 
 ## Tutorial
 
-Try it on the [live app](https://hackyeah-2026-theta.vercel.app) or [run it locally](#first-time-setup). Each agent has its own workspace that walks you through setup.
+Try it on the [live app](https://hackyeah-2026-theta.vercel.app) or [run it locally](#first-time-setup). Create an account with your email, GitHub or Google; everything you add is private to your account. A new account starts with the demo support agent and a starter set of guardrails. Each agent has its own workspace that walks you through setup.
 
 | #   | Go to                                   | Do this                                                                          |
 | --- | --------------------------------------- | -------------------------------------------------------------------------------- |
@@ -72,12 +72,17 @@ make web        # panel on :5173
 
 Open http://localhost:5173 and follow the [tutorial](#tutorial).
 
-The agents pages need a Supabase database:
+The panel needs a Supabase database for accounts and data:
 
 ```bash
 make supabase        # start local Supabase, apply migrations, write env files
+make test-db         # RLS ownership tests against it (pgTAP)
 make supabase-stop   # stop it (data kept in Docker volumes)
 ```
+
+Then create an account on the sign-up page. Locally, email confirmation is off; password reset emails land in the local inbox at http://127.0.0.1:54324. The demo agent is registered only when the API can reach it at a public address, so locally set `DEMO_AGENT_URL` in `apps/api/.env` to a tunnel URL of `apps/agents` if you want it.
+
+GitHub and Google sign-in need OAuth apps: put their ids and secrets in `apps/api/supabase/.env` and enable the providers in `apps/api/supabase/config.toml` (see the comment there). On the hosted project, add them under Authentication → Providers, and add `https://<your domain>/auth/callback` and `https://<your domain>/reset-password` to the redirect URLs.
 
 ## Make targets
 
@@ -91,6 +96,7 @@ make supabase-stop   # stop it (data kept in Docker volumes)
 | `make lint`         | ruff lint + format check + mypy                 |
 | `make test`         | pytest (root workspace + API project)           |
 | `make supabase`     | Local Supabase + env files                      |
+| `make test-db`      | RLS ownership tests (pgTAP) on local Supabase   |
 | `make supabase-stop`| Stop local Supabase                             |
 
 If you prefer [just](https://github.com/casey/just), a `justfile` with the same commands sits next to the Makefile (`just api`, `just web`, ...).
@@ -126,7 +132,7 @@ cd apps/web && pnpm lint && pnpm build
 
 ## Deployment
 
-The whole app deploys as one Vercel project using [Services](https://vercel.com/docs/services), configured in the root `vercel.json` (leave the project's Root Directory empty). On one domain, `/` is the landing page, `/api/*` and the `/a/*` gateway go to the API, and every other path is the web panel. The API's build step exports `uv.lock` to `requirements.txt`. Environment variables: `SUPABASE_URL` and `SUPABASE_KEY` (API and web build; the web key must be the publishable one) and `ANTHROPIC_API_KEY` (model access for the judge engine).
+The whole app deploys as one Vercel project using [Services](https://vercel.com/docs/services), configured in the root `vercel.json` (leave the project's Root Directory empty). On one domain, `/` is the landing page, `/api/*` and the `/a/*` gateway go to the API, `/demo-agent/*` is the demo agent every new account gets, and every other path is the web panel. The API's build step exports `uv.lock` to `requirements.txt`. Environment variables: `SUPABASE_URL` and `SUPABASE_KEY` (API and web build; the publishable key, never the service-role one), `ANTHROPIC_API_KEY` (the judge engine and the demo agent), and `BASE_PATH=/demo-agent` plus `MOCK=1` (canned replies) or the Anthropic key for the demo agent. Apply the migrations to the hosted database with `supabase db push`.
 
 ## CI
 

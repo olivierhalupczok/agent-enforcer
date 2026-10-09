@@ -1,9 +1,10 @@
+import type { Bootstrap } from '../api/me'
 // Test double for the real guardrail and signature endpoints in apps/api: same paths, shapes and
 // error format ({detail}). The browser never uses it — MSW bypasses these paths to the real API.
 import { http, HttpResponse } from 'msw'
 import type { SendMessageRequest } from '../api/a2a'
 import { apiPath } from '../api/client'
-import { simulateTestChat } from '../api/testChatSimulator'
+import { simulateTestChat } from './testChatSimulator'
 import type {
   Agent,
   AgentCard,
@@ -253,6 +254,9 @@ export const fakeApi: {
   auditSupported: boolean
   auditPageSize: number
   auditRequests: URL[]
+  /** POST /me/bootstrap calls, and what the next one answers. */
+  bootstrapCalls: number
+  bootstrap: Bootstrap
 } = {
   guardrails: seedGuardrails(),
   signatures: seedSignatures(),
@@ -283,9 +287,13 @@ export const fakeApi: {
   bindingsSupported: true,
   bindingRequests: [],
   bindingId: 1,
+  bootstrapCalls: 0,
+  bootstrap: { library: 'already_seeded', demo_agent: 'already_added' },
 }
 
 export function resetFakeApi(): void {
+  fakeApi.bootstrapCalls = 0
+  fakeApi.bootstrap = { library: 'already_seeded', demo_agent: 'already_added' }
   fakeApi.guardrails = seedGuardrails()
   fakeApi.signatures = seedSignatures()
   fakeApi.nextId = 1
@@ -359,8 +367,6 @@ function fakeDryRun(body: DryRunRequest): DryRunResult {
   }
 }
 
-const isAdmin = (request: Request) => request.headers.get('X-Role') === 'admin'
-
 function page<T>(rows: T[], params: URLSearchParams): { data: T[]; next_cursor: string | null } {
   const start = Number(params.get('before') ?? 0)
   const size = Number(params.get('limit')) || fakeApi.auditPageSize
@@ -369,6 +375,11 @@ function page<T>(rows: T[], params: URLSearchParams): { data: T[]; next_cursor: 
 }
 
 export const fakeApiHandlers = [
+  http.post(apiPath('/me/bootstrap'), () => {
+    fakeApi.bootstrapCalls += 1
+    return HttpResponse.json(fakeApi.bootstrap)
+  }),
+
   http.get(apiPath('/guardrail-templates'), () => HttpResponse.json(FAKE_TEMPLATES)),
   http.get(apiPath('/guardrails'), () => HttpResponse.json(fakeApi.guardrails)),
 
@@ -406,7 +417,6 @@ export const fakeApiHandlers = [
   http.get(apiPath('/injection-signatures'), () => HttpResponse.json(fakeApi.signatures)),
 
   http.post(apiPath('/injection-signatures'), async ({ request }) => {
-    if (!isAdmin(request)) return detail(403, 'Only admins can change injection signatures')
     const body = (await request.json()) as InjectionSignature
     if (!/^[a-z0-9][a-z0-9-]*$/.test(body.id)) {
       return validation("String should match pattern '^[a-z0-9][a-z0-9-]*$'", ['body', 'id'])
@@ -416,8 +426,7 @@ export const fakeApiHandlers = [
     return HttpResponse.json(body, { status: 201 })
   }),
 
-  http.delete(apiPath('/injection-signatures/:id'), ({ request, params }) => {
-    if (!isAdmin(request)) return detail(403, 'Only admins can change injection signatures')
+  http.delete(apiPath('/injection-signatures/:id'), ({ params }) => {
     if (!fakeApi.signatures.some((s) => s.id === params.id)) return detail(404, 'Signature not found')
     fakeApi.signatures = fakeApi.signatures.filter((s) => s.id !== params.id)
     return new HttpResponse(null, { status: 204 })
