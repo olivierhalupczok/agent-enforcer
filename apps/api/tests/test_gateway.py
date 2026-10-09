@@ -22,8 +22,7 @@ from a2a.client import (
 )
 from a2a.types import a2a_pb2 as a2a_types
 from app.api.routes.agents.deps import AgentDatabase, ResolvedUpstream, get_agent_database
-from app.audit.memory import MEMORY
-from app.audit.recorder import InMemoryAuditRecorder, get_audit_recorder
+from app.audit.recorder import get_audit_recorder
 from app.bindings.models import EffectivePolicy
 from app.bindings.resolve import resolve
 from app.gateway import a2a
@@ -35,6 +34,7 @@ from app.gateway.resolver import SupabaseAgentResolver, UpstreamTarget, get_agen
 from app.main import app
 from fastapi.testclient import TestClient
 from pydantic import HttpUrl
+from tests.fakes import MEMORY, InMemoryAuditRecorder
 
 # apps/test-agent is a separate project (root uv workspace); it needs only FastAPI, so the
 # API's tests load it straight from its source folder.

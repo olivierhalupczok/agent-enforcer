@@ -13,10 +13,10 @@ import json
 import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Annotated, Any
 
 import httpx
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from pydantic import HttpUrl, ValidationError
 
@@ -37,6 +37,7 @@ from app.gateway.pipeline import (
 )
 from app.gateway.resolver import UpstreamTarget
 from app.guardrails.judge import get_judge
+from app.guardrails.signatures import SignatureRepository, get_signature_repository
 
 # The httpx client's own ceiling; the per-call time limit (B-05) is settings.CALL_TIMEOUT_SECONDS.
 UPSTREAM_TIMEOUT_SECONDS = 120.0
@@ -52,8 +53,11 @@ async def get_gateway_http_client() -> AsyncIterator[httpx.AsyncClient]:
         yield client
 
 
-def get_guardrail_engine() -> GuardrailEngine:
-    return LocalEngine(get_judge())
+def get_guardrail_engine(
+    signatures: Annotated[SignatureRepository, Depends(get_signature_repository)],
+) -> GuardrailEngine:
+    """The panel's engine (test chat, security scans): the signed-in owner's signatures."""
+    return LocalEngine(get_judge(), signatures.list())
 
 
 class UpstreamError(Exception):

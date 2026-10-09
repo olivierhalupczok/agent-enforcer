@@ -185,8 +185,8 @@ async def run_scan(
     engine: GuardrailEngine,
     client: httpx.AsyncClient,
     judge: Judge | None,
-    role: str | None,
     canary: str,
+    role: str | None = None,
     probes: list[Probe] = PROBES,
     budget_seconds: float = SCAN_BUDGET_SECONDS,
 ) -> AsyncIterator[ProbeResult]:

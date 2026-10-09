@@ -20,13 +20,11 @@ app/
 │   └── index.html       # Landing page template
 ├── api/
 │   ├── __init__.py
-│   ├── main.py          # API router assembly
-│   ├── deps.py          # Shared dependencies
-│   └── routes/
-│       ├── __init__.py
-│       └── items.py     # Item endpoints
+│   ├── main.py          # API router assembly (every route needs a signed-in user)
+│   └── routes/          # Agents, guardrails, bindings, MCP, audit, scans, test chat
 └── core/
     ├── __init__.py
+    ├── auth.py          # get_current_user: the Supabase user behind the bearer token
     └── config.py        # Application settings
 ```
 
@@ -49,8 +47,8 @@ vercel dev
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/` | Landing page |
-| `GET` | `/api/v1/items/` | List sample items |
-| `GET` | `/api/v1/items/{item_id}` | Get item by ID |
+| `*` | `/api/v1/...` | Panel API; needs `Authorization: Bearer <Supabase access token>` |
+| `POST` | `/a/{agent_id}` | Guarded A2A URL; needs the agent's gateway key in `X-API-Key` |
 | `GET` | `/docs` | Interactive API docs (Swagger UI) |
 
 ## Deploying to Vercel
