@@ -50,3 +50,12 @@ def test_api_entrypoint_is_the_fastapi_app_and_serves_both_public_prefixes() -> 
     paths = app.openapi()["paths"]
     assert any(p.startswith("/api/v1/") for p in paths)
     assert any(p.startswith("/a/") for p in paths)
+
+
+def test_the_demo_agent_is_public_under_demo_agent() -> None:
+    demo = _config()["services"]["demo-agent"]
+    assert demo["root"] == "apps/agents"
+    assert demo["entrypoint"] == "app:app"
+    sources = [r["source"] for r in _config()["rewrites"]]
+    assert _service_for("/demo-agent/(.*)") == "demo-agent"
+    assert sources.index("/demo-agent/(.*)") < sources.index("/(.*)")

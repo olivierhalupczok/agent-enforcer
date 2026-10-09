@@ -24,6 +24,7 @@ The reply is `{"result": {"message": {"role": "ROLE_AGENT", "parts": [{"text": "
 | `AGENT_NAME` | `Support Assistant` | Agent Card name |
 | `AGENT_DESCRIPTION` | support description | Agent Card description |
 | `PUBLIC_URL` | request URL | Base URL written into the Agent Card; set it behind a tunnel or proxy |
+| `BASE_PATH` | none | Path prefix for both routes, e.g. `/demo-agent` (how the root `vercel.json` deploys it next to the hub) |
 | `SYSTEM_PROMPT` | built-in support prompt | Replace to make a different agent |
 | `MODEL` | `claude-haiku-4-5-20251001` | Any Messages API model |
 | `AGENT_API_KEY` | none | If set, callers must send `Authorization: Bearer <key>` |
