@@ -1,7 +1,7 @@
 -- Every row belongs to one user, and a user reaches only their own rows (migration
 -- 20261009120000_per_user_ownership). Run with: make test-db
 begin;
-select plan(25);
+select plan(27);
 
 -- Two accounts. The profile trigger gives each one a profile row.
 insert into auth.users (id, email) values
@@ -74,6 +74,13 @@ select is((select count(*)::int from public.injection_signatures), 0, 'B sees no
 select is((select count(*)::int from public.security_scans), 0, 'B sees no scans of A');
 select is((select count(*)::int from public.profiles), 1, 'B sees only their own profile');
 
+update public.profiles set bootstrapped_at = now(), demo_agent_added_at = now();
+select is(
+    (select count(*)::int from public.profiles where bootstrapped_at is not null),
+    1,
+    'B can record their own setup steps'
+);
+
 update public.guardrails set name = 'Hijacked' where id = 'gr-only-a';
 delete from public.agents where id = 'a0000000-0000-0000-0000-00000000000a';
 
@@ -125,6 +132,12 @@ select is(
     (select count(*)::int from public.agents where id = 'a0000000-0000-0000-0000-00000000000a'),
     1,
     'B could not delete A''s agent'
+);
+select is(
+    (select bootstrapped_at from public.profiles
+     where id = 'aaaaaaaa-0000-0000-0000-000000000001'),
+    null,
+    'B could not change A''s profile'
 );
 
 -- --- the gateway answers with the agent owner's library only ---------------------------------------

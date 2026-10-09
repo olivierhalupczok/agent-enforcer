@@ -178,16 +178,22 @@ create table public.profiles (
     display_name text,
     avatar_url text,
     bootstrapped_at timestamp with time zone,
+    demo_agent_added_at timestamp with time zone,
     created_at timestamp with time zone not null default now()
 );
 comment on table public.profiles is
-    'One row per account. bootstrapped_at is set once the seed library and demo agent exist.';
+    'One row per account, with what the first-sign-in setup (POST /api/v1/me/bootstrap) did.';
+comment on column public.profiles.bootstrapped_at is
+    'When the seed guardrails and injection signatures were copied into this account.';
+comment on column public.profiles.demo_agent_added_at is
+    'When the shared demo agent was registered for this user (they may delete it later).';
 comment on column public.profiles.id is 'The owning user (auth.users.id), like owner_id elsewhere.';
 
 alter table public.profiles enable row level security;
 revoke all on table public.profiles from anon, authenticated;
 grant select on table public.profiles to authenticated;
-grant update (display_name, avatar_url, bootstrapped_at) on table public.profiles to authenticated;
+grant update (display_name, avatar_url, bootstrapped_at, demo_agent_added_at)
+    on table public.profiles to authenticated;
 grant all on table public.profiles to service_role;
 
 create function private.create_profile()

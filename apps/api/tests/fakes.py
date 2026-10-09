@@ -46,6 +46,7 @@ from app.mcp.models import (
     summarize,
 )
 from app.mcp.repository import NameTakenError, from_row, get_mcp_server_repository, to_row
+from app.profiles import Step, get_profile_repository
 from app.security.models import ScanListItem, ScanRecord
 from app.security.repository import HISTORY_LIMIT, get_scan_repository
 from app.seeds import seed_guardrails, seed_signatures
@@ -83,6 +84,7 @@ MEMORY = MemoryAudit()
 SERVERS: dict[str, McpServer] = {}  # id -> public server (secrets are not kept)
 ACCESS: dict[tuple[str, str], list[str]] = {}  # (agent id, server id) -> tools it may call
 SCANS: dict[str, ScanRecord] = {}
+PROFILE: set[Step] = {"bootstrapped_at", "demo_agent_added_at"}  # setup steps done
 
 
 def reset() -> None:
@@ -95,6 +97,8 @@ def reset() -> None:
     SERVERS.clear()
     ACCESS.clear()
     SCANS.clear()
+    PROFILE.clear()
+    PROFILE.update({"bootstrapped_at", "demo_agent_added_at"})
 
 
 # --- library -------------------------------------------------------------------------------------
@@ -418,6 +422,14 @@ class InMemoryScanRepository:
         return SCANS.get(scan_id)
 
 
+class InMemoryProfileRepository:
+    def done(self) -> set[Step]:
+        return set(PROFILE)
+
+    def mark(self, step: Step) -> None:
+        PROFILE.add(step)
+
+
 # --- wiring --------------------------------------------------------------------------------------
 
 
@@ -432,6 +444,7 @@ def use_fakes(app: FastAPI) -> None:
         get_agent_mcp_repository: InMemoryAgentMcpRepository,
         get_audit_repository: InMemoryAuditRepository,
         get_scan_repository: InMemoryScanRepository,
+        get_profile_repository: InMemoryProfileRepository,
         get_policy_loader: CatalogPolicyLoader,
         get_audit_recorder: InMemoryAuditRecorder,
         get_gateway_mcp_loader: InMemoryMcpGrantLoader,

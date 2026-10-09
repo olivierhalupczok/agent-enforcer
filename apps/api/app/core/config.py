@@ -27,6 +27,10 @@ class Settings(BaseSettings):
         ),
     )
 
+    # The shared demo agent every new account gets (POST /api/v1/me/bootstrap). Empty: the
+    # demo-agent service on the same domain as the request (root vercel.json, /demo-agent).
+    DEMO_AGENT_URL: str = ""
+
     # LLM judge engine (E-02). Without a key, llm_judge verdicts are simulated heuristics.
     ANTHROPIC_API_KEY: str = ""
     JUDGE_MODEL: str = "claude-haiku-4-5"

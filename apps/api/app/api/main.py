@@ -8,6 +8,7 @@ from app.api.routes import (
     gateway_keys,
     guardrails,
     mcp_servers,
+    me,
     security,
     signatures,
     test_chat,
@@ -29,3 +30,4 @@ api_router.include_router(mcp_servers.router)
 api_router.include_router(agent_mcp_servers.router)
 api_router.include_router(signatures.router)
 api_router.include_router(audit.router)
+api_router.include_router(me.router)
