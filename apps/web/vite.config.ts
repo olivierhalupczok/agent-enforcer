@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
     plugins: [react(), tailwindcss()],
-    // /a/ is the guarded A2A gateway (B-01), served at the API root like on Vercel (vercel.json).
+    // /a/ is the guarded A2A gateway (B-01), served at the API root like on Vercel (root vercel.json).
     server: {
       proxy: {
         '/api': env.API_URL || 'http://localhost:8000',

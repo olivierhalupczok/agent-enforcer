@@ -126,7 +126,7 @@ cd apps/web && pnpm lint && pnpm build
 
 ## Deployment
 
-The web panel and the landing page deploy to Vercel as separate projects. The API deploys from `apps/api` (set the project's Root Directory to `apps/api`); its build step exports `uv.lock` to `requirements.txt`. Environment variables the API expects: `ANTHROPIC_API_KEY` (model access for the judge engine), `SUPABASE_URL` and `SUPABASE_KEY`.
+The whole app deploys as one Vercel project using [Services](https://vercel.com/docs/services), configured in the root `vercel.json` (leave the project's Root Directory empty). On one domain, `/` is the landing page, `/api/*` and the `/a/*` gateway go to the API, and every other path is the web panel. The API's build step exports `uv.lock` to `requirements.txt`. Environment variables: `SUPABASE_URL` and `SUPABASE_KEY` (API and web build; the web key must be the publishable one) and `ANTHROPIC_API_KEY` (model access for the judge engine).
 
 ## CI
 
