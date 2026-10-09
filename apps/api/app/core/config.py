@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _API_ROOT = Path(__file__).resolve().parents[2]
@@ -17,7 +18,14 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     SUPABASE_URL: str = ""
-    SUPABASE_KEY: str = ""
+    # Publishable/anon key only. SUPABASE_KEY wins; otherwise the names the Vercel Supabase
+    # integration syncs (and updates on key rotation) are used.
+    SUPABASE_KEY: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "SUPABASE_KEY", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_ANON_KEY"
+        ),
+    )
 
     # LLM judge engine (E-02). Without a key, llm_judge verdicts are simulated heuristics.
     ANTHROPIC_API_KEY: str = ""
