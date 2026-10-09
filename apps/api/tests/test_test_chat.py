@@ -125,7 +125,7 @@ def chat(text: str, context_id: str | None = "ctx-chat-1", **headers: str) -> di
 def hub_of(answer: dict[str, Any]) -> dict[str, Any]:
     result = answer["result"]
     holder = result["message"] if "message" in result else result["task"]
-    hub: dict[str, Any] = holder["metadata"]["guardrailHub"]
+    hub: dict[str, Any] = holder["metadata"]["agentEnforcer"]
     return hub
 
 
@@ -350,7 +350,7 @@ def test_openapi_documents_the_test_chat() -> None:
     response_ref = operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
     assert request_ref.endswith("/ChatRequest")
     assert response_ref.endswith("/ChatResponse")
-    hub = spec["components"]["schemas"]["GuardrailHubMetadata"]["properties"]
+    hub = spec["components"]["schemas"]["AgentEnforcerMetadata"]["properties"]
     assert {"trace", "usage", "limits", "scores", "blocked", "stage"} <= hub.keys()
 
 
@@ -407,7 +407,7 @@ def test_guarded_url_reports_the_demo_role_and_strips_it() -> None:
     }
     r = client.post(f"/a/{AGENT_ID}", json=call, headers={"X-API-Key": "gk_key"})
 
-    hub = r.json()["result"]["message"]["metadata"]["guardrailHub"]
+    hub = r.json()["result"]["message"]["metadata"]["agentEnforcer"]
     assert hub["role"] == "intern"
     assert ("gr-competitors", "role") in [(e["guardrailId"], e["source"]) for e in hub["trace"]]
 
@@ -426,7 +426,7 @@ def test_the_test_chat_tells_the_agent_its_mcp_servers(agent: Agent) -> None:
     )
     InMemoryAgentMcpRepository().put(AGENT_ID, server, ["search_docs"])
     chat("hello")
-    hub = agent.bodies[0]["params"]["metadata"]["guardrailHub"]
+    hub = agent.bodies[0]["params"]["metadata"]["agentEnforcer"]
     assert hub["mcpServers"] == [
         {
             "id": "mcp-docs",

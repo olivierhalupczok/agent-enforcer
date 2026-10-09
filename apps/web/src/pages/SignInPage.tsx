@@ -43,7 +43,7 @@ export function SignInPage() {
         className="flex w-full max-w-sm flex-col gap-5 rounded-xl border border-line bg-surface p-6"
       >
         <h1 id="sign-in-title" className="m-0 text-xl font-semibold">
-          Sign in to Guardrail Hub
+          Sign in to Agent Enforcer
         </h1>
         {notice && <p className="m-0 rounded-lg bg-warn-bg p-3 text-sm text-warn-fg">{notice}</p>}
         {!configured ? (
