@@ -54,23 +54,23 @@ const { PageShell, PageHeader, TableFrame, buttonPrimary } = window.AgentEnforce
 
 ## App shell setup
 
-`Sidebar` and `Layout` read a router and two contexts, and throw without them. `Layout` renders the routed page through `<Outlet>`, so use it as a parent route. Wrap like this (all exported from the bundle, react-router included):
+`Sidebar` and `Layout` read a router and the auth context, and throw without them. `Layout` renders the routed page through `<Outlet>`, so use it as a parent route. Wrap like this (all exported from the bundle, react-router included):
 
 ```jsx
-const { MemoryRouter, Routes, Route, AuthContext, RoleContext, Layout } = window.AgentEnforcer
+const { MemoryRouter, Routes, Route, AuthContext, Layout } = window.AgentEnforcer
 const auth = { status: 'ready', configured: true, notice: null, watchTables: null,
-  session: { accessToken: '', email: 'maria@acme.dev', anonymous: false },
-  signIn: async () => null, signOut: async () => {} }
+  session: { accessToken: '', userId: 'preview-user', email: 'maria@acme.dev' },
+  signIn: async () => null, signUp: async () => ({ error: null, confirmEmail: false }),
+  signInWithOAuth: async () => null, sendPasswordReset: async () => null,
+  updatePassword: async () => null, signOut: async () => {} }
 <MemoryRouter initialEntries={['/agents']}>
   <AuthContext value={auth}>
-    <RoleContext value={{ role: 'admin', setRole: () => {} }}>
-      <Routes><Route element={<Layout />}><Route path="*" element={<YourPage />} /></Route></Routes>
-    </RoleContext>
+    <Routes><Route element={<Layout />}><Route path="*" element={<YourPage />} /></Route></Routes>
   </AuthContext>
 </MemoryRouter>
 ```
 
-The nav is Agents, then a Library section (Guardrails, MCP servers) and a Monitor section (Sessions, Audit log, Security); a tester sees only Test chat. `role` is `'admin' | 'dev' | 'tester'`. The nav highlights the link matching the router path. `Brand` has white text: only place it on `bg-sidebar` inside an `on-dark` wrapper.
+The nav is Agents, then a Library section (Guardrails, MCP servers) and a Monitor section (Sessions, Audit log, Security). There are no roles: every signed-in user manages their own workspace. The nav highlights the link matching the router path. `Brand` has white text: only place it on `bg-sidebar` inside an `on-dark` wrapper.
 
 ## Where the truth lives
 

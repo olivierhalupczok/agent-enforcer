@@ -6,7 +6,6 @@ import {
   MemoryRouter,
   PageHeader,
   PageShell,
-  RoleContext,
   Route,
   Routes,
   TableFrame,
@@ -15,13 +14,16 @@ import {
 } from 'web'
 import type { ReactNode } from 'react'
 
-const noop = () => {}
 const auth = {
   status: 'ready' as const,
-  session: { accessToken: '', email: 'maria.kowalska@acme.dev', anonymous: false },
+  session: { accessToken: '', userId: 'preview-user', email: 'maria.kowalska@acme.dev' },
   configured: true,
   notice: null,
   signIn: async () => null,
+  signUp: async () => ({ error: null, confirmEmail: false }),
+  signInWithOAuth: async () => null,
+  sendPasswordReset: async () => null,
+  updatePassword: async () => null,
   signOut: async () => {},
   watchTables: null,
 }
@@ -30,13 +32,11 @@ function App({ path, page }: { path: string; page: ReactNode }) {
   return (
     <MemoryRouter initialEntries={[path]}>
       <AuthContext value={auth}>
-        <RoleContext value={{ role: 'admin', setRole: noop }}>
-          <Routes>
-            <Route element={<Layout />}>
-              <Route path="*" element={page} />
-            </Route>
-          </Routes>
-        </RoleContext>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route path="*" element={page} />
+          </Route>
+        </Routes>
       </AuthContext>
     </MemoryRouter>
   )

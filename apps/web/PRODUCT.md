@@ -61,8 +61,9 @@ The product distinguishes these terms:
   rule verdicts, reasons, latency, usage, cost, and simulated state.
 - Review session counters and costs, negative audit events, OWASP LLM Top 10 security scans, and
   registered MCP servers with tool allowlists.
-- Support Admin, Developer, and Tester workflows. Current role selection and authorization are demo
-  implementations and are not a production identity or permissions model.
+- Give every user a private workspace: Supabase accounts (email and password, GitHub, Google),
+  every database row owned by one user, and row-level security that returns only the owner's rows.
+  New accounts start with the seed guardrails, injection signatures and the demo agent.
 - Store session counters rather than conversation content. Audit details contain short reasons, not
   message text. Agent and MCP secrets are not returned to the frontend.
 - Fail closed when a mandatory guardrail engine errors; optional guardrails fail open with a
@@ -72,7 +73,7 @@ The product distinguishes these terms:
 - Named gateway policies, exemptions, complete approval and evaluator workflows, and MCP-to-agent
   attachment are not current capabilities or product commitments. Future work must not claim them
   without renewed approval.
-- Whether anonymous guest access belongs in production remains undecided.
+- Shared team workspaces, roles and anonymous guest access are not current capabilities.
 
 ## Brand Commitments
 
